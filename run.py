@@ -11,4 +11,4 @@ with app.app_context():
 start_scheduler(app)
 
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False) # use_reloader=False to prevent scheduler running twice
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
