@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Dashboard Overview</h2>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card glass mb-4">
+            <div class="card-body text-center py-5">
+                <div class="display-4 text-success mb-2">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h1 class="display-5 fw-bold">{{ stats.sent }}</h1>
+                <p class="text-muted mb-0">Emails Sent</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card glass mb-4">
+            <div class="card-body text-center py-5">
+                <div class="display-4 text-warning mb-2">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h1 class="display-5 fw-bold">{{ stats.pending }}</h1>
+                <p class="text-muted mb-0">Pending / Scheduled</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card glass mb-4">
+            <div class="card-body text-center py-5">
+                <div class="display-4 text-danger mb-2">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <h1 class="display-5 fw-bold">{{ stats.failed }}</h1>
+                <p class="text-muted mb-0">Failed Attempts</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Placeholder for future Chart.js integration -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card glass">
+            <div class="card-header">
+                <i class="fas fa-chart-area me-2"></i>Activity Log
+            </div>
+            <div class="card-body">
+                <p class="text-center text-muted py-5">Activity chart coming soon...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

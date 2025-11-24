@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/campaigns" class="text-decoration-none text-muted">
+        <i class="fas fa-arrow-left me-1"></i> Back to Campaigns
+    </a>
+</div>
+
+<div class="card glass mb-4">
+    <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="card-title">{{ campaign.name }}</h2>
+            <p class="text-muted mb-0">
+                Created on {{ campaign.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </p>
+        </div>
+
+        <!-- Add More Emails Button -->
+        <button class="btn btn-primary" onclick="openAddMoreModal()">
+            <i class="fas fa-user-plus me-1"></i> Add More Emails
+        </button>
+    </div>
+</div>
+
+<div class="card glass">
+    <div class="card-header">
+        <i class="fas fa-list me-2"></i>Recipient List
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Recipient</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Scheduled</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for email in campaign.emails %}
+                    <tr>
+                        <td class="ps-4">{{ email.recipient }}</td>
+                        <td>{{ email.subject }}</td>
+                        <td>
+                            <span class="badge rounded-pill 
+                                bg-{% if email.status == 'sent' %}success
+                                    {% elif email.status == 'failed' %}danger
+                                    {% else %}warning{% endif %}">
+                                {{ email.status|upper }}
+                            </span>
+                        </td>
+                        <td class="text-muted small">
+                            {{ email.scheduled_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </td>
+                        <td class="text-end pe-4">
+
+                            {% if email.status == 'pending' %}
+                                <!-- Delete Email -->
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="deleteEmail({{ email.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            {% endif %}
+
+                            {% if email.status == 'failed' %}
+                                <!-- Retry -->
+                                <form action="/tasks/{{ email.id }}/retry" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-light">
+                                        <i class="fas fa-redo"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add More Emails Modal -->
+<div id="addMoreModal" class="modal" tabindex="-1" style="display:none;">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>Add More Emails
+                </h5>
+                <button class="btn-close" onclick="closeAddMoreModal()"></button>
+            </div>
+
+            <form id="addMoreForm" method="POST" action="/campaign/{{ campaign.id }}/add-emails" enctype="multipart/form-data">
+                <div class="modal-body">
+
+                    <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
+
+                    <!-- File Upload -->
+                    <div class="mb-3">
+                        <label class="form-label">Upload Excel/CSV</label>
+                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls, .csv">
+                    </div>
+
+                    <div class="text-center text-muted my-2">OR</div>
+
+                    <!-- Manual Emails -->
+                    <div class="mb-3">
+                        <label class="form-label">Enter Emails Manually</label>
+                        <textarea class="form-control" name="recipients" rows="3"
+                            placeholder="email1@example.com, email2@example.com"></textarea>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" onclick="closeAddMoreModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check me-1"></i>Add Emails
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+/* ----------- Modal Control ----------- */
+function openAddMoreModal() {
+    document.getElementById("addMoreModal").style.display = "block";
+}
+function closeAddMoreModal() {
+    document.getElementById("addMoreModal").style.display = "none";
+}
+
+/* ----------- Delete Single Email ----------- */
+function deleteEmail(id) {
+    if (!confirm("Remove this email from the campaign?")) return;
+
+    fetch(`/email/${id}/delete`, { method: 'POST' })
+        .then(res => {
+            if (res.ok) location.reload();
+            else alert("Failed to delete email.");
+        });
+}
+</script>
+{% endblock %}

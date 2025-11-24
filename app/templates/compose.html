@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Compose Campaign</h2>
+
+<div class="card glass">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="composeForm">
+            
+            <!-- Campaign Name -->
+            <div class="mb-4">
+                <label for="campaign_name" class="form-label">Campaign Name</label>
+                <input type="text" class="form-control" id="campaign_name" name="campaign_name"
+                       placeholder="e.g., Monthly Newsletter" required>
+            </div>
+
+            <!-- File Upload -->
+            <div class="mb-4">
+                <label class="form-label">Recipients (Excel/CSV)</label>
+                <div class="input-group">
+                    <input type="file" class="form-control" id="file" name="file" accept=".xlsx, .xls, .csv">
+                    <label class="input-group-text glass" for="file">Upload</label>
+                </div>
+                <div class="form-text text-muted mt-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Upload an Excel with an "Email" column. Placeholder example: <code>{{Name}}</code>
+                </div>
+            </div>
+
+            <!-- Manual Recipients -->
+            <div class="mb-4">
+                <label class="form-label">Or Enter Emails Manually</label>
+                <textarea class="form-control" id="recipients" name="recipients" rows="2"
+                          placeholder="user@example.com, another@example.com"></textarea>
+            </div>
+
+            <!-- Subject -->
+            <div class="mb-4">
+                <label class="form-label">Subject</label>
+                <input type="text" class="form-control" id="subject" name="subject"
+                       placeholder="Enter email subject" required>
+            </div>
+
+            <!-- Message Mode Toggle -->
+            <div class="mb-3">
+                <label class="form-label">Message Type</label><br>
+                <button type="button" id="btnRich" class="btn btn-sm btn-primary me-2">Rich Text Editor</button>
+                <button type="button" id="btnHtml" class="btn btn-sm btn-outline-secondary">Raw HTML</button>
+            </div>
+
+            <!-- Rich Text Editor -->
+            <div id="quillSection" class="mb-4">
+                <label class="form-label">Message (Rich Text)</label>
+                <div id="editor" style="height: 300px;"></div>
+            </div>
+
+            <!-- HTML Code Editor -->
+            <div id="htmlSection" class="mb-4" style="display: none;">
+                <label class="form-label">HTML Code</label>
+                <textarea id="htmlInput" class="form-control" rows="10"
+                          placeholder="Paste your HTML here"></textarea>
+
+                <label class="form-label mt-3">Preview</label>
+                <iframe id="htmlPreview" class="w-100 border rounded" style="height: 300px;"></iframe>
+            </div>
+
+            <!-- Hidden Input Storage -->
+            <input type="hidden" name="body" id="body">
+
+            <!-- Scheduling -->
+            <div class="row mb-4 mt-4">
+                <div class="col-md-6">
+                    <label class="form-label">Schedule Time (Optional)</label>
+                    <input type="datetime-local" class="form-control" id="scheduled_time" name="scheduled_time">
+                    <div class="form-text text-muted">Leave blank to send immediately.</div>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-paper-plane me-2"></i>Create Campaign & Send
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // -------------- Rich Text Editor ---------------------
+    var quill = new Quill('#editor', {
+        theme: 'snow',
+        placeholder: 'Write your message...',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                [{ 'color': [] }, { 'background': [] }],
+                ['link', 'image', 'clean']
+            ]
+        }
+    });
+
+    // -------------- Toggle Logic -------------------------
+    let useHtml = false;
+
+    document.getElementById("btnRich").onclick = () => {
+        useHtml = false;
+        document.getElementById("quillSection").style.display = "block";
+        document.getElementById("htmlSection").style.display = "none";
+
+        document.getElementById("btnRich").classList.add("btn-primary");
+        document.getElementById("btnRich").classList.remove("btn-outline-secondary");
+
+        document.getElementById("btnHtml").classList.remove("btn-primary");
+        document.getElementById("btnHtml").classList.add("btn-outline-secondary");
+    };
+
+    document.getElementById("btnHtml").onclick = () => {
+        useHtml = true;
+        document.getElementById("quillSection").style.display = "none";
+        document.getElementById("htmlSection").style.display = "block";
+
+        document.getElementById("btnHtml").classList.add("btn-primary");
+        document.getElementById("btnHtml").classList.remove("btn-outline-secondary");
+
+        document.getElementById("btnRich").classList.remove("btn-primary");
+        document.getElementById("btnRich").classList.add("btn-outline-secondary");
+
+        updatePreview();
+    };
+
+    // -------------- HTML Preview Live ---------------------
+    const htmlInput = document.getElementById("htmlInput");
+    const htmlPreview = document.getElementById("htmlPreview");
+
+    function updatePreview() {
+        const doc = htmlPreview.contentDocument || htmlPreview.contentWindow.document;
+        doc.open();
+        doc.write(htmlInput.value);
+        doc.close();
+    }
+
+    htmlInput.addEventListener("input", updatePreview);
+
+    // -------------- Form Submit -------------------------
+    document.getElementById("composeForm").onsubmit = () => {
+        const hiddenBody = document.getElementById("body");
+        if (useHtml) {
+            hiddenBody.value = htmlInput.value;      // Use HTML source
+        } else {
+            hiddenBody.value = quill.root.innerHTML; // Use rich text editor
+        }
+    };
+</script>
+{% endblock %}
