@@ -1,27 +1,80 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
-from app import db
-from app.models import Email, SMTPSettings, Campaign
+from flask_login import current_user, login_user, logout_user, login_required
+from app import db, login
+from app.models import Email, SMTPSettings, Campaign, User
 from datetime import datetime, timedelta
-import uuid
 import pytz
 
-user_tz = pytz.timezone("Asia/Kolkata")   # or detect automatically
+user_tz = pytz.timezone("Asia/Kolkata")
 utc = pytz.UTC
 
 bp = Blueprint('main', __name__)
 
+@login.user_loader
+def load_user(id):
+    return User.query.get(int(id))
+
+# --- AUTH ROUTES ---
+
+@bp.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+
+        if User.query.filter((User.username == username) | (User.email == email)).first():
+            flash('Username or Email already exists.', 'danger')
+            return redirect(url_for('main.signup'))
+
+        user = User(username=username, email=email)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('main.login'))
+    return render_template('signup.html')
+
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    if request.method == 'POST':
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user is None or not user.check_password(request.form['password']):
+            flash('Invalid username or password', 'danger')
+            return redirect(url_for('main.login'))
+        login_user(user)
+        return redirect(url_for('main.index'))
+    return render_template('login.html')
+
+@bp.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('main.login'))
+
+# --- APPLICATION ROUTES (Protected) ---
+
 @bp.route('/')
+@login_required
 def index():
-    stats = {
-        'sent': Email.query.filter_by(status='sent').count(),
-        'pending': Email.query.filter_by(status='pending').count(),
-        'failed': Email.query.filter_by(status='failed').count()
-    }
+    # Filter stats by campaigns belonging to current_user
+    my_campaign_ids = [c.id for c in current_user.campaigns]
+
+    if not my_campaign_ids:
+        stats = {'sent': 0, 'pending': 0, 'failed': 0}
+    else:
+        stats = {
+            'sent': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='sent').count(),
+            'pending': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='pending').count(),
+            'failed': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='failed').count()
+        }
     return render_template('dashboard.html', stats=stats)
 
-
-
 @bp.route('/compose', methods=['GET', 'POST'])
+@login_required
 def compose():
     if request.method == 'POST':
         campaign_name = request.form.get('campaign_name')
@@ -35,8 +88,8 @@ def compose():
             flash('Campaign Name, Subject, and Body are required', 'danger')
             return redirect(url_for('main.compose'))
 
-        # Create campaign
-        campaign = Campaign(name=campaign_name)
+        # Create campaign LINKED TO CURRENT USER
+        campaign = Campaign(name=campaign_name, user_id=current_user.id)
         db.session.add(campaign)
         db.session.commit()
 
@@ -44,14 +97,9 @@ def compose():
         scheduled_time = datetime.utcnow()
         if scheduled_time_str:
             try:
-                # Parse the datetime string (e.g., "2025-11-25T09:27")
                 naive_dt = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
-                # Assume user entered IST time, convert to UTC
                 ist_time = user_tz.localize(naive_dt)
                 scheduled_time = ist_time.astimezone(utc).replace(tzinfo=None)
-                print(f"📅 DEBUG - IST time from form: {naive_dt} IST")
-                print(f"⏰ DEBUG - Converted to UTC: {scheduled_time} UTC")
-                print(f"🕐 DEBUG - Current UTC time: {datetime.utcnow()}")
             except ValueError:
                 flash('Invalid date format', 'warning')
 
@@ -61,7 +109,6 @@ def compose():
         if file and file.filename:
             try:
                 import pandas as pd
-
                 if file.filename.endswith('.csv'):
                     df = pd.read_csv(file)
                 else:
@@ -82,7 +129,6 @@ def compose():
                     subject = subject_template
                     body = body_template
 
-                    # Replace {{column}}
                     for col in df.columns:
                         val = "" if pd.isna(row[col]) else str(row[col])
                         subject = subject.replace(f"{{{{{col}}}}}", val)
@@ -93,12 +139,11 @@ def compose():
                         'subject': subject,
                         'body': body
                     })
-
             except Exception as e:
                 flash(f"Error processing file: {e}", 'danger')
                 return redirect(url_for('main.compose'))
 
-        # Method 2: Manual recipients input
+        # Method 2: Manual recipients
         elif recipients_str:
             recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
             for r in recipients:
@@ -124,17 +169,16 @@ def compose():
             db.session.add(new_email)
 
         db.session.commit()
-
         flash(f'Campaign "{campaign_name}" created with {len(emails_to_send)} emails.', 'success')
         return redirect(url_for('main.campaigns'))
 
     return render_template('compose.html')
 
-
-
 @bp.route('/campaigns')
+@login_required
 def campaigns():
-    campaigns = Campaign.query.order_by(Campaign.created_at.desc()).all()
+    # Only show user's campaigns
+    campaigns = Campaign.query.filter_by(user_id=current_user.id).order_by(Campaign.created_at.desc()).all()
 
     campaign_stats = []
     for c in campaigns:
@@ -155,30 +199,33 @@ def campaigns():
 
     return render_template('campaigns.html', campaigns=campaign_stats)
 
-
-
 @bp.route('/campaign/<int:id>')
+@login_required
 def campaign_details(id):
-    campaign = Campaign.query.get_or_404(id)
+    # Ensure user owns this campaign
+    campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     return render_template('campaign_details.html', campaign=campaign)
 
-
-
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
+@login_required
 def retry_task(id):
-    email = Email.query.get_or_404(id)
+    # Ensure email belongs to a campaign owned by user
+    email = Email.query.join(Campaign).filter(
+        Email.id == id, 
+        Campaign.user_id == current_user.id
+    ).first_or_404()
+
     email.status = 'pending'
     email.scheduled_time = datetime.utcnow()
     db.session.commit()
     flash(f'Retrying email to {email.recipient}', 'info')
-    
+
     if email.campaign_id:
         return redirect(url_for('main.campaign_details', id=email.campaign_id))
     return redirect(url_for('main.campaigns'))
 
-
-
 @bp.route('/schedule-email', methods=['POST'])
+@login_required
 def schedule_email_api():
     data = request.get_json()
     recipient = data.get('recipient') or ""
@@ -191,27 +238,44 @@ def schedule_email_api():
 
     scheduled_time = datetime.utcnow() + timedelta(seconds=delay)
 
+    # Create a default/hidden campaign for direct API calls if needed, 
+    # or just create email without campaign (but careful with ownership).
+    # Ideally, API should specify campaign. For now, we link to a "Direct" campaign or None.
+    # Note: If campaign_id is None, it won't show in any user dashboard. 
+    # Let's create a temporary campaign holder for API calls or require it.
+
+    # For simplicity in this snippets, we will just create it.
+    # WARNING: Without campaign_id, it might be orphaned in UI. 
+    # Let's create a "API Campaign" for the user if it doesn't exist.
+
+    api_campaign = Campaign.query.filter_by(user_id=current_user.id, name="API Emails").first()
+    if not api_campaign:
+        api_campaign = Campaign(name="API Emails", user_id=current_user.id)
+        db.session.add(api_campaign)
+        db.session.commit()
+
     new_email = Email(
         recipient=recipient.strip(),
         subject=subject,
         body=body,
         scheduled_time=scheduled_time,
-        status="pending"
+        status="pending",
+        campaign_id=api_campaign.id
     )
     db.session.add(new_email)
     db.session.commit()
 
     return jsonify({'message': 'Email scheduled successfully', 'id': new_email.id}), 201
 
-
-
 @bp.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
-    smtp_settings = SMTPSettings.query.first()
+    # Fetch settings specifically for this user
+    smtp_settings = SMTPSettings.query.filter_by(user_id=current_user.id).first()
 
     if request.method == 'POST':
         if not smtp_settings:
-            smtp_settings = SMTPSettings()
+            smtp_settings = SMTPSettings(user_id=current_user.id)
             db.session.add(smtp_settings)
 
         # Read form inputs
@@ -223,49 +287,27 @@ def settings():
         form_signature = request.form.get('signature')
         form_use_tls = bool(request.form.get('use_tls'))
 
-        # Safe setter helper: set attribute only if model has it, else create attribute
+        # Safe setter helper
         def safe_set(obj, name, value):
             try:
                 if hasattr(obj, name):
                     setattr(obj, name, value)
-                else:
-                    # create attribute on object instance (won't persist to DB unless column exists)
-                    setattr(obj, name, value)
             except Exception:
                 pass
 
-        # Try to set several common names to avoid mismatches across versions
-        safe_set(smtp_settings, 'smtp_server', form_server)
         safe_set(smtp_settings, 'server', form_server)
-        safe_set(smtp_settings, 'host', form_server)
 
-        if form_port:
-            try:
-                port_val = int(form_port)
-            except Exception:
-                port_val = None
-        else:
+        try:
+            port_val = int(form_port) if form_port else None
+        except:
             port_val = None
-
-        safe_set(smtp_settings, 'smtp_port', port_val)
         safe_set(smtp_settings, 'port', port_val)
 
-        safe_set(smtp_settings, 'smtp_username', form_username)
         safe_set(smtp_settings, 'username', form_username)
-
-        safe_set(smtp_settings, 'smtp_password', form_password)
         safe_set(smtp_settings, 'password', form_password)
-
-        safe_set(smtp_settings, 'from_email', form_from_email)
         safe_set(smtp_settings, 'default_sender', form_from_email)
-        safe_set(smtp_settings, 'from_addr', form_from_email)
-        safe_set(smtp_settings, 'sender', form_from_email)
-
         safe_set(smtp_settings, 'signature', form_signature)
-        safe_set(smtp_settings, 'sig', form_signature)
-
         safe_set(smtp_settings, 'use_tls', form_use_tls)
-        safe_set(smtp_settings, 'tls', form_use_tls)
 
         db.session.commit()
         flash('Settings updated successfully', 'success')
@@ -274,59 +316,77 @@ def settings():
     return render_template('settings.html', settings=smtp_settings)
 
 @bp.route('/campaign/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_campaign(id):
-    campaign = Campaign.query.get_or_404(id)
+    campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
 
-    # delete all emails under this campaign
+    # Emails will be deleted by cascade, but good to be explicit or safe
     Email.query.filter_by(campaign_id=id).delete()
 
-    # delete campaign
     db.session.delete(campaign)
     db.session.commit()
-
     return ("", 204)
 
 @bp.route('/email/<int:id>/delete', methods=['POST'])
+@login_required
 def delete_email(id):
-    email = Email.query.get_or_404(id)
+    # Ensure email belongs to user
+    email = Email.query.join(Campaign).filter(
+        Email.id == id, 
+        Campaign.user_id == current_user.id
+    ).first_or_404()
+
     db.session.delete(email)
     db.session.commit()
     return ("", 204)
+
 @bp.route("/campaign/<int:id>/add-emails", methods=["POST"])
+@login_required
 def add_emails_to_campaign(id):
     from app.models import Email
-    from datetime import datetime
     import pandas as pd
 
-    campaign = Campaign.query.get_or_404(id)
+    campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+
     recipients_str = request.form.get("recipients")
     file = request.files.get("file")
     emails_added = 0
 
+    # Use first existing email to get template body/subject if available, else default
+    base_subject = campaign.name
+    base_body = ""
+    if campaign.emails:
+        base_subject = campaign.emails[0].subject
+        base_body = campaign.emails[0].body
+
     # Method 1: File Upload
     if file and file.filename:
-        if file.filename.endswith(".csv"):
-            df = pd.read_csv(file)
-        else:
-            df = pd.read_excel(file)
+        try:
+            if file.filename.endswith(".csv"):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
 
-        df.columns = [c.strip() for c in df.columns]
-        email_col = next((c for c in df.columns if c.lower() == "email"), None)
+            df.columns = [c.strip() for c in df.columns]
+            email_col = next((c for c in df.columns if c.lower() == "email"), None)
 
-        for _, row in df.iterrows():
-            recipient = row[email_col]
-            if pd.isna(recipient): continue
+            if email_col:
+                for _, row in df.iterrows():
+                    recipient = row[email_col]
+                    if pd.isna(recipient): continue
 
-            new_email = Email(
-                recipient=str(recipient).strip(),
-                subject=campaign.emails[0].subject,   # reuse campaign subject
-                body=campaign.emails[0].body,         # reuse body template
-                scheduled_time=datetime.now(),
-                status="pending",
-                campaign_id=id,
-            )
-            db.session.add(new_email)
-            emails_added += 1
+                    new_email = Email(
+                        recipient=str(recipient).strip(),
+                        subject=base_subject,
+                        body=base_body,
+                        scheduled_time=datetime.now(),
+                        status="pending",
+                        campaign_id=id,
+                    )
+                    db.session.add(new_email)
+                    emails_added += 1
+        except Exception as e:
+            flash(f"Error reading file: {e}", "danger")
 
     # Method 2: Manual
     if recipients_str:
@@ -334,8 +394,8 @@ def add_emails_to_campaign(id):
         for r in recipients:
             new_email = Email(
                 recipient=r,
-                subject=campaign.emails[0].subject,
-                body=campaign.emails[0].body,
+                subject=base_subject,
+                body=base_body,
                 scheduled_time=datetime.now(),
                 status="pending",
                 campaign_id=id,

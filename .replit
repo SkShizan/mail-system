@@ -1,10 +1,10 @@
-modules = ["web", "python-3.11"]
+modules = ["web", "python-3.11", "postgresql-16"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["redis"]
+packages = ["glibcLocales", "redis"]
 
 [workflows]
 runButton = "Project"
@@ -48,6 +48,10 @@ outputType = "console"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 39519
+externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"

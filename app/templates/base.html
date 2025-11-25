@@ -1,371 +1,373 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Mailer</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Quill.js -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Nexus Mailer</title>
+        <!-- Google Fonts -->
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <!-- Bootstrap 5 -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <!-- Quill.js -->
+        <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+        <!-- FontAwesome -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
-    <style>
-        :root {
-            --bg-color: #174143;             /* Dark green teal background */
-            --sidebar-bg: rgba(23, 65, 67, 0.7);
-            --card-bg: rgba(23, 65, 67, 0.55);
+        <style>
+            :root {
+                --bg-color: #174143;             /* Dark green teal background */
+                --sidebar-bg: rgba(23, 65, 67, 0.7);
+                --card-bg: rgba(23, 65, 67, 0.55);
 
-            --text-primary: #F5E5E1;         /* Soft cream white */
-            --text-secondary: rgba(245, 229, 225, 0.65);
+                --text-primary: #F5E5E1;         /* Soft cream white */
+                --text-secondary: rgba(245, 229, 225, 0.65);
 
-            --accent-color: #F9B487;         /* Peach gold accent */
-            --accent-hover: #F7A06B;
+                --accent-color: #F9B487;         /* Peach gold accent */
+                --accent-hover: #F7A06B;
 
-            --glass-border: 1px solid rgba(249, 180, 135, 0.2);
-        }
+                --glass-border: 1px solid rgba(249, 180, 135, 0.2);
+            }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            font-family: 'Outfit', sans-serif;
-            overflow-x: hidden;
-        }
+            body {
+                background-color: var(--bg-color);
+                color: var(--text-primary);
+                font-family: 'Outfit', sans-serif;
+                overflow-x: hidden;
+            }
 
-        /* Glassmorphism Utilities */
-        .glass {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: var(--glass-border);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
+            /* Glassmorphism Utilities */
+            .glass {
+                background: var(--card-bg);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border: var(--glass-border);
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            }
 
-        /* Sidebar */
-        .sidebar {
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 260px;
-            z-index: 1000;
-            padding-top: 2rem;
-            transition: all 0.3s ease;
-        }
+            /* Sidebar */
+            .sidebar {
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 260px;
+                z-index: 1000;
+                padding-top: 2rem;
+                transition: all 0.3s ease;
+            }
 
-        .sidebar-brand {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--accent-color);
-            text-align: center;
-            margin-bottom: 2rem;
-            letter-spacing: 1px;
-        }
+            .sidebar-brand {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: var(--accent-color);
+                text-align: center;
+                margin-bottom: 2rem;
+                letter-spacing: 1px;
+            }
 
-        .nav-link {
-            color: var(--text-secondary);
-            padding: 1rem 2rem;
-            font-weight: 500;
-            transition: all 0.3s;
-            border-left: 3px solid transparent;
-        }
+            .nav-link {
+                color: var(--text-secondary);
+                padding: 1rem 2rem;
+                font-weight: 500;
+                transition: all 0.3s;
+                border-left: 3px solid transparent;
+            }
 
-        .nav-link:hover,
-        .nav-link.active {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.05);
-            border-left-color: var(--accent-color);
-        }
+            .nav-link:hover,
+            .nav-link.active {
+                color: var(--text-primary);
+                background: rgba(255, 255, 255, 0.05);
+                border-left-color: var(--accent-color);
+            }
 
-        .nav-link i {
-            margin-right: 10px;
-            width: 20px;
-            text-align: center;
-        }
+            .nav-link i {
+                margin-right: 10px;
+                width: 20px;
+                text-align: center;
+            }
 
-        /* Main Content */
-        .main-content {
-            margin-left: 260px;
-            padding: 2rem;
-        }
+            /* Main Content */
+            .main-content {
+                margin-left: 260px;
+                padding: 2rem;
+            }
 
-        /* Cards */
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            border: var(--glass-border);
-            border-radius: 16px;
-            color: var(--text-primary);
-        }
+            /* Cards */
+            .card {
+                background: var(--card-bg);
+                backdrop-filter: blur(12px);
+                border: var(--glass-border);
+                border-radius: 16px;
+                color: var(--text-primary);
+            }
 
-        .card-header {
-            background: rgba(255, 255, 255, 0.05);
-            border-bottom: var(--glass-border);
-            font-weight: 600;
-            padding: 1rem 1.5rem;
-        }
+            .card-header {
+                background: rgba(255, 255, 255, 0.05);
+                border-bottom: var(--glass-border);
+                font-weight: 600;
+                padding: 1rem 1.5rem;
+            }
 
-        /* Forms */
-        .form-control,
-        .form-select {
-            background-color: rgba(15, 23, 42, 0.6);
-            border: var(--glass-border);
-            color: var(--text-primary);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-        }
+            /* Forms */
+            .form-control,
+            .form-select {
+                background-color: var(--bg-color);
+                border: var(--glass-border);
+                color: var(--text-primary);
+                border-radius: 8px;
+                padding: 0.75rem 1rem;
+            }
 
-        .form-control:focus {
-            background-color: rgba(15, 23, 42, 0.8);
-            border-color: var(--accent-color);
-            color: var(--text-primary);
-            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
-        }
+            .form-control:focus {
+                background-color: rgba(15, 23, 42, 0.8);
+                border-color: var(--accent-color);
+                color: var(--text-primary);
+                box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+            }
 
-        .form-label {
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
+            .form-label {
+                color: var(--text-secondary);
+                font-weight: 500;
+                margin-bottom: 0.5rem;
+            }
 
-        /* Buttons */
-        .btn-primary {
-            background-color: var(--accent-color);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
+            /* Buttons */
+            .btn-primary {
+                background-color: var(--accent-color);
+                border: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: all 0.3s;
+            }
 
-        .btn-primary:hover {
-            background-color: var(--accent-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
+            .btn-primary:hover {
+                background-color: var(--accent-hover);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            }
 
-        /* Tables */
-        .table {
-            color: var(--text-primary);
-        }
+            /* Tables */
+            .table {
+                color: var(--text-primary);
+            }
 
-        .table thead th {
-            border-bottom: var(--glass-border);
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
+            .table thead th {
+                border-bottom: var(--glass-border);
+                color: var(--text-secondary);
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.85rem;
+            }
 
-        .table td {
-            border-bottom: var(--glass-border);
-            vertical-align: middle;
-        }
+            .table td {
+                border-bottom: var(--glass-border);
+                vertical-align: middle;
+            }
 
-        .table-hover tbody tr:hover {
-            color: var(--text-primary);
-            background-color: rgba(255, 255, 255, 0.05);
-        }
+            .table-hover tbody tr:hover {
+                color: var(--text-primary);
+                background-color: rgba(255, 255, 255, 0.05);
+            }
 
-        /* Quill Editor Overrides */
-        .ql-toolbar {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.1) !important;
-            border-radius: 8px 8px 0 0;
-        }
+            /* Quill Editor Overrides */
+            .ql-toolbar {
+                background: rgba(255, 255, 255, 0.05);
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 8px 8px 0 0;
+            }
 
-        .ql-container {
-            border-color: rgba(255, 255, 255, 0.1) !important;
-            border-radius: 0 0 8px 8px;
-            font-family: 'Outfit', sans-serif;
-            font-size: 1rem;
-        }
+            .ql-container {
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 0 0 8px 8px;
+                font-family: 'Outfit', sans-serif;
+                font-size: 1rem;
+            }
 
-        .ql-editor {
-            min-height: 200px;
-            overflow-x: hidden;
-        }
+            .ql-editor {
+                min-height: 200px;
+                overflow-x: hidden;
+            }
 
-        /* Glassmorphism Utilities */
-        .glass {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: var(--glass-border);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
+            /* Glassmorphism Utilities */
+            .glass {
+                background: var(--card-bg);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border: var(--glass-border);
+                box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            }
 
-        /* Sidebar */
-        .sidebar {
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 260px;
-            z-index: 1000;
-            padding-top: 2rem;
-            transition: all 0.3s ease;
-        }
+            /* Sidebar */
+            .sidebar {
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 260px;
+                z-index: 1000;
+                padding-top: 2rem;
+                transition: all 0.3s ease;
+            }
 
-        .sidebar-brand {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--accent-color);
-            text-align: center;
-            margin-bottom: 2rem;
-            letter-spacing: 1px;
-        }
+            .sidebar-brand {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: var(--accent-color);
+                text-align: center;
+                margin-bottom: 2rem;
+                letter-spacing: 1px;
+            }
 
-        .nav-link {
-            color: var(--text-secondary);
-            padding: 1rem 2rem;
-            font-weight: 500;
-            transition: all 0.3s;
-            border-left: 3px solid transparent;
-        }
+            .nav-link {
+                color: var(--text-secondary);
+                padding: 1rem 2rem;
+                font-weight: 500;
+                transition: all 0.3s;
+                border-left: 3px solid transparent;
+            }
 
-        .nav-link:hover,
-        .nav-link.active {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.05);
-            border-left-color: var(--accent-color);
-        }
+            .nav-link:hover,
+            .nav-link.active {
+                color: var(--text-primary);
+                background: rgba(255, 255, 255, 0.05);
+                border-left-color: var(--accent-color);
+            }
 
-        .nav-link i {
-            margin-right: 10px;
-            width: 20px;
-            text-align: center;
-        }
+            .nav-link i {
+                margin-right: 10px;
+                width: 20px;
+                text-align: center;
+            }
 
-        /* Main Content */
-        .main-content {
-            margin-left: 260px;
-            padding: 2rem;
-        }
+            /* Main Content */
+            .main-content {
+                margin-left: 260px;
+                padding: 2rem;
+            }
 
-        /* Cards */
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            border: var(--glass-border);
-            border-radius: 16px;
-            color: var(--text-primary);
-        }
+            /* Cards */
+            .card {
+                background: var(--card-bg);
+                backdrop-filter: blur(12px);
+                border: var(--glass-border);
+                border-radius: 16px;
+                color: var(--text-primary);
+            }
 
-        .card-header {
-            background: rgba(255, 255, 255, 0.05);
-            border-bottom: var(--glass-border);
-            font-weight: 600;
-            padding: 1rem 1.5rem;
-        }
+            .card-header {
+                background: rgba(255, 255, 255, 0.05);
+                border-bottom: var(--glass-border);
+                font-weight: 600;
+                padding: 1rem 1.5rem;
+            }
 
-        /* Forms */
-        .form-control,
-        .form-select {
-            background-color: rgba(15, 23, 42, 0.6);
-            border: var(--glass-border);
-            color: var(--text-primary);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-        }
+            /* Forms */
+            .form-control,
+            .form-select {
+                background-color: var(--bg-color);
+                border: var(--glass-border);
+                color: var(--text-primary);
+                border-radius: 8px;
+                padding: 0.75rem 1rem;
+            }
 
-        .form-control:focus {
-            background-color: rgba(15, 23, 42, 0.8);
-            border-color: var(--accent-color);
-            color: var(--text-primary);
-            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
-        }
+            .form-control:focus {
+                background-color: rgba(15, 23, 42, 0.8);
+                border-color: var(--accent-color);
+                color: var(--text-primary);
+                box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+            }
 
-        .form-label {
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
+            .form-label {
+                color: var(--text-secondary);
+                font-weight: 500;
+                margin-bottom: 0.5rem;
+            }
 
-        /* Buttons */
-        .btn-primary {
-            background-color: var(--accent-color);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
+            /* Buttons */
+            .btn-primary {
+                background-color: var(--accent-color);
+                border: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: all 0.3s;
+            }
 
-        .btn-primary:hover {
-            background-color: var(--accent-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
+            .btn-primary:hover {
+                background-color: var(--accent-hover);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            }
 
-        /* Tables */
-        .table {
-            color: var(--text-primary);
-        }
+            /* Tables */
+            .table {
+                color: var(--text-primary);
+            }
 
-        .table thead th {
-            border-bottom: var(--glass-border);
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
+            .table thead th {
+                border-bottom: var(--glass-border);
+                color: var(--text-secondary);
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.85rem;
+            }
 
-        .table td {
-            border-bottom: var(--glass-border);
-            vertical-align: middle;
-        }
+            .table td {
+                border-bottom: var(--glass-border);
+                vertical-align: middle;
+            }
 
-        .table-hover tbody tr:hover {
-            color: var(--text-primary);
-            background-color: rgba(255, 255, 255, 0.05);
-        }
+            .table-hover tbody tr:hover {
+                color: var(--text-primary);
+                background-color: rgba(255, 255, 255, 0.05);
+            }
 
-        /* Quill Editor Overrides */
-        .ql-toolbar {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.1) !important;
-            border-radius: 8px 8px 0 0;
-        }
+            /* Quill Editor Overrides */
+            .ql-toolbar {
+                background: rgba(255, 255, 255, 0.05);
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 8px 8px 0 0;
+            }
 
-        .ql-container {
-            border-color: rgba(255, 255, 255, 0.1) !important;
-            border-radius: 0 0 8px 8px;
-            font-family: 'Outfit', sans-serif;
-            font-size: 1rem;
-        }
+            .ql-container {
+                border-color: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 0 0 8px 8px;
+                font-family: 'Outfit', sans-serif;
+                font-size: 1rem;
+            }
 
-        .ql-editor {
-            min-height: 200px;
-        }
+            .ql-editor {
+                min-height: 200px;
+            }
 
-        .ql-stroke {
-            stroke: var(--text-secondary) !important;
-        }
+            .ql-stroke {
+                stroke: var(--text-secondary) !important;
+            }
 
-        .ql-fill {
-            fill: var(--text-secondary) !important;
-        }
+            .ql-fill {
+                fill: var(--text-secondary) !important;
+            }
 
-        .ql-picker {
-            color: var(--text-secondary) !important;
-        }
+            .ql-picker {
+                color: var(--text-secondary) !important;
+            }
 
-        /* Alerts */
-        .alert {
-            border-radius: 12px;
-            border: none;
-            backdrop-filter: blur(10px);
-        }
-    </style>
-</head>
+            /* Alerts */
+            .alert {
+                border-radius: 12px;
+                border: none;
+                backdrop-filter: blur(10px);
+            }
+        </style>
+    </head>
 
-<body>
+<body class="{% if not current_user.is_authenticated %}auth-page{% endif %}">
     <div class="container-fluid p-0">
+        
+        {% if current_user.is_authenticated %}
         <!-- Sidebar -->
         <nav class="sidebar glass">
             <div class="sidebar-brand">
@@ -392,8 +394,17 @@
                         <i class="fas fa-cog"></i> Settings
                     </a>
                 </li>
+                
+                <li class="nav-item mt-4 pt-4 border-top border-secondary">
+                    <div class="px-4 mb-2 text-white-50 small">Logged in as:</div>
+                    <div class="px-4 mb-3 fw-bold">{{ current_user.username }}</div>
+                    <a class="nav-link text-danger" href="{{ url_for('main.logout') }}">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </li>
             </ul>
         </nav>
+        {% endif %}
 
         <!-- Main Content -->
         <main class="main-content">
