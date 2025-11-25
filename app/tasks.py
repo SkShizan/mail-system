@@ -68,7 +68,15 @@ def send_batch_task(self, email_ids):
     server = create_smtp_connection(settings)
     if not server:
         print("❌ SMTP Connection FAILED! Retrying...")
-        self.retry(countdown=60)
+        try:
+            self.retry(countdown=60)
+        except Exception as e:
+            # If max retries exceeded, mark emails as failed instead of crashing
+            print(f"⚠ Max retries exceeded for batch. Marking {len(emails)} emails as failed.")
+            for e in emails:
+                e.status = 'failed'
+            db.session.commit()
+            return f"Failed after max retries - marked {len(emails)} emails as failed"
 
     sent_count = 0
     failed_count = 0
