@@ -40,12 +40,18 @@ def compose():
         db.session.add(campaign)
         db.session.commit()
 
-        # Scheduled time
-        scheduled_time = datetime.now()
+        # Scheduled time - convert from IST to UTC
+        scheduled_time = datetime.utcnow()
         if scheduled_time_str:
             try:
-                local_time = user_tz.localize(datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M'))
-                scheduled_time = local_time.astimezone(utc)
+                # Parse the datetime string (e.g., "2025-11-25T09:27")
+                naive_dt = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                # Assume user entered IST time, convert to UTC
+                ist_time = user_tz.localize(naive_dt)
+                scheduled_time = ist_time.astimezone(utc).replace(tzinfo=None)
+                print(f"📅 DEBUG - IST time from form: {naive_dt} IST")
+                print(f"⏰ DEBUG - Converted to UTC: {scheduled_time} UTC")
+                print(f"🕐 DEBUG - Current UTC time: {datetime.utcnow()}")
             except ValueError:
                 flash('Invalid date format', 'warning')
 

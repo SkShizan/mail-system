@@ -36,6 +36,11 @@ def celery_init_app(app: Flask) -> Celery:
 
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
+    
+    # Configure Beat schedule from config
+    celery_app.conf.beat_schedule = app.config.get('CELERY_BEAT_SCHEDULE', {})
+    celery_app.conf.timezone = 'UTC'
+    
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
