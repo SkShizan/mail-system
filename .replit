@@ -4,6 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["redis"]
 
 [workflows]
 runButton = "Project"
@@ -17,6 +18,10 @@ author = "agent"
 task = "workflow.run"
 args = "Flask Email Campaign Manager"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Celery Worker & Beat"
+
 [[workflows.workflow]]
 name = "Flask Email Campaign Manager"
 author = "agent"
@@ -29,13 +34,20 @@ waitForPort = 5000
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow]]
+name = "Celery Worker & Beat"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash start_celery.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 34435
-externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"

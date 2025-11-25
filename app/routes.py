@@ -3,6 +3,10 @@ from app import db
 from app.models import Email, SMTPSettings, Campaign
 from datetime import datetime, timedelta
 import uuid
+import pytz
+
+user_tz = pytz.timezone("Asia/Kolkata")   # or detect automatically
+utc = pytz.UTC
 
 bp = Blueprint('main', __name__)
 
@@ -40,7 +44,8 @@ def compose():
         scheduled_time = datetime.now()
         if scheduled_time_str:
             try:
-                scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                local_time = user_tz.localize(datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M'))
+                scheduled_time = local_time.astimezone(utc)
             except ValueError:
                 flash('Invalid date format', 'warning')
 
@@ -160,7 +165,10 @@ def retry_task(id):
     email.scheduled_time = datetime.utcnow()
     db.session.commit()
     flash(f'Retrying email to {email.recipient}', 'info')
-    return redirect(url_for('main.tasks'))
+    
+    if email.campaign_id:
+        return redirect(url_for('main.campaign_details', id=email.campaign_id))
+    return redirect(url_for('main.campaigns'))
 
 
 
