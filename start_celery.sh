@@ -10,4 +10,4 @@ fi
 
 # Start Celery worker and beat in the foreground
 echo "Starting Celery worker and beat scheduler..."
-celery -A celery_worker.celery worker --beat --loglevel=info --concurrency=4 --max-tasks-per-child=50
+celery -A celery_worker.celery worker --beat --loglevel=info --concurrency=2 --max-tasks-per-child=50

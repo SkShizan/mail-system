@@ -96,12 +96,18 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 27, 2025)
 
-### Fast Email Processing 🚀
-- **Parallel Workers**: Increased from 1 to 4 concurrent workers
-- **Faster Per-Email Delay**: Reduced from 15s to 5s (with hourly rate limit retry safety)
-- **Larger Batches**: Increased from 20 to 50 emails per batch
-- **Batch Dispatch**: 0.5s spacing between dispatches
-- **Result**: ~10-15x faster email processing speed!
+### Smart Rate Limit Detection & Fixes 🎯
+**Issue Discovered**: Hostinger has PER-MINUTE rate limits (not just hourly)
+- Only 1-2 emails sent per batch before 451 errors hit
+- Problem: 4 workers × 5-sec delays = 48 emails/minute (exceeds limit)
+- Solution: Reduced to 2 workers × 10-sec delays = 12 emails/minute
+
+### Conservative Configuration (Stable & Reliable) ✅
+- **Celery Concurrency**: 2 workers (down from 4)
+- **Per-Email Delay**: 10 seconds (increased from 5s)
+- **Total Throughput**: ~12 emails/minute (respects all provider limits)
+- **Batch Size**: 50 emails per batch
+- **Connection Refresh**: Every 500 emails (safety measure)
 
 ### Intelligent Hourly Rate Limit Retry ✅
 - Detects 451 rate limit errors from SMTP servers
@@ -110,13 +116,6 @@ Configured for Replit Autoscale deployment:
 - Email stays 'pending' but skipped during hourly limit cooldown
 - Automatically retries when 1 hour has passed
 - Prevents wasted retry attempts that count against provider limits
-
-### Dynamic Configuration ✅
-- Celery concurrency: 4 workers (parallel processing)
-- Per-email delay: 5 seconds (optimized with rate limit retry)
-- Batch size: 50 emails (faster batches)
-- Connection refresh: Every 500 emails (minimizes reconnections)
-- **All features work with any SMTP provider!**
 
 ## Performance & Scalability
 - **Multi-User Architecture**: Each user's emails processed independently with their own SMTP settings

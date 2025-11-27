@@ -185,7 +185,9 @@ def send_batch_task(self, email_ids):
             print(f"❌ {email.recipient} failed", flush=True)
 
         # Delay per provider rules (respect SMTP rate limits)
-        time.sleep(5.0)  # 5 seconds between emails - with hourly rate limit retry, this is safe
+        # Hostinger: Per-minute throttling + per-second limits
+        # Conservative: 10 seconds between emails with 2 workers = 12 emails/minute total
+        time.sleep(10.0)  # 10 seconds between emails - safe for all providers
 
     # Save results
     db.session.commit()

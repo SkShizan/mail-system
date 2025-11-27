@@ -16,7 +16,6 @@
             </p>
         </div>
 
-        <!-- Add More Emails Button -->
         <button class="btn btn-primary" onclick="openAddMoreModal()">
             <i class="fas fa-user-plus me-1"></i> Add More Emails
         </button>
@@ -24,13 +23,20 @@
 </div>
 
 <div class="card glass">
-    <div class="card-header">
-        <i class="fas fa-list me-2"></i>Recipient List
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-2"></i>Recipient List</span>
+        
+        <div class="input-group input-group-sm" style="width: 250px;">
+            <span class="input-group-text bg-transparent border-end-0">
+                <i class="fas fa-search text-muted"></i>
+            </span>
+            <input type="text" id="tableSearchInput" class="form-control border-start-0" placeholder="Search emails, status...">
+        </div>
     </div>
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0" id="recipientTable">
                 <thead>
                     <tr>
                         <th class="ps-4">Recipient</th>
@@ -42,7 +48,7 @@
                 </thead>
                 <tbody>
                     {% for email in campaign.emails %}
-                    <tr>
+                    <tr class="searchable-row">
                         <td class="ps-4">{{ email.recipient }}</td>
                         <td>{{ email.subject }}</td>
                         <td>
@@ -59,7 +65,6 @@
                         <td class="text-end pe-4">
 
                             {% if email.status == 'pending' %}
-                                <!-- Delete Email -->
                                 <button class="btn btn-sm btn-outline-danger"
                                         onclick="deleteEmail({{ email.id }})">
                                     <i class="fas fa-trash"></i>
@@ -67,7 +72,6 @@
                             {% endif %}
 
                             {% if email.status == 'failed' %}
-                                <!-- Retry -->
                                 <form action="/tasks/{{ email.id }}/retry" method="POST" style="display:inline;">
                                     <button type="submit" class="btn btn-sm btn-outline-light">
                                         <i class="fas fa-redo"></i>
@@ -78,6 +82,12 @@
                         </td>
                     </tr>
                     {% endfor %}
+                    
+                    <tr id="noResultsRow" style="display: none;">
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            <i class="fas fa-search me-2"></i>No matching records found.
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -85,7 +95,6 @@
 </div>
 
 
-<!-- Add More Emails Modal -->
 <div id="addMoreModal" class="modal" tabindex="-1" style="display:none;">
     <div class="modal-dialog modal-lg">
         <div class="modal-content glass">
@@ -101,7 +110,6 @@
 
                     <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
 
-                    <!-- File Upload -->
                     <div class="mb-3">
                         <label class="form-label">Upload Excel/CSV</label>
                         <input type="file" class="form-control" name="file" accept=".xlsx, .xls, .csv">
@@ -109,7 +117,6 @@
 
                     <div class="text-center text-muted my-2">OR</div>
 
-                    <!-- Manual Emails -->
                     <div class="mb-3">
                         <label class="form-label">Enter Emails Manually</label>
                         <textarea class="form-control" name="recipients" rows="3"
@@ -152,5 +159,36 @@ function deleteEmail(id) {
             else alert("Failed to delete email.");
         });
 }
+
+/* ----------- Dynamic Client-Side Search ----------- */
+document.getElementById('tableSearchInput').addEventListener('keyup', function() {
+    // 1. Get the search term and convert to lowercase
+    const searchValue = this.value.toLowerCase();
+    
+    // 2. Get all rows that contain data
+    const rows = document.querySelectorAll('.searchable-row');
+    let hasVisibleRow = false;
+
+    rows.forEach(row => {
+        // 3. Get the text content of the row (combines Recipient, Subject, Status, etc.)
+        const rowText = row.textContent.toLowerCase();
+
+        // 4. Check if the row text contains the search term
+        if (rowText.includes(searchValue)) {
+            row.style.display = ""; // Show row
+            hasVisibleRow = true;
+        } else {
+            row.style.display = "none"; // Hide row
+        }
+    });
+
+    // 5. Handle "No Results" message
+    const noResultsRow = document.getElementById('noResultsRow');
+    if (!hasVisibleRow) {
+        noResultsRow.style.display = ""; // Show 'No results' if everything else is hidden
+    } else {
+        noResultsRow.style.display = "none";
+    }
+});
 </script>
 {% endblock %}
