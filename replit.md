@@ -27,8 +27,9 @@ This is a Flask-based email campaign manager application that allows users to cr
 - **Smart Scheduling** - Schedule emails with IST timezone support (auto-converts to UTC)
 - **SMTP Integration** - Per-user SMTP configuration
 - **Automated Processing** - Celery workers process emails in background
-- **Batch Sending** - Efficient batch processing (50 emails per batch)
-- **Auto Retry** - Failed emails automatically retry with exponential backoff
+- **Batch Sending** - Efficient batch processing (20 emails per batch)
+- **Smart Rate Limit Retry** - Emails hitting rate limits automatically retry after 1 hour
+- **Provider-Agnostic** - Works with any SMTP provider (Hostinger, SendGrid, Gmail, etc.)
 
 ## Technology Stack
 - **Backend**: Flask (Python web framework)
@@ -46,14 +47,22 @@ This is a Flask-based email campaign manager application that allows users to cr
 ### Email Processing Flow
 1. **Scheduler Dispatcher** (runs every 10 seconds via Celery Beat)
    - Finds pending emails due for sending
-   - Groups emails into batches of 50
+   - Skips emails waiting for rate limit reset (rate_limit_retry_at field)
+   - Groups emails into batches of 20
    - Dispatches batch tasks to worker queue
 
 2. **Batch Sender** (Celery workers)
-   - Processes email batches in parallel
+   - Processes email batches sequentially (1 concurrent worker)
    - Opens single SMTP connection per batch (efficient)
-   - Implements retry logic with exponential backoff
+   - **Rate Limit Handling**: Detects 451/quota errors and schedules 1-hour retry
+   - Maintains 15-second delay between emails (respects provider limits)
    - Updates email status in database
+
+3. **Rate Limit Retry Logic**
+   - When 451 error detected: sets `rate_limit_retry_at = now + 1 hour`
+   - Email stays in 'pending' status but is excluded from send attempts
+   - Scheduler automatically resends email after 1 hour
+   - Works with all SMTP providers (Hostinger, SendGrid, Gmail, etc.)
 
 ### Workflows
 - **Flask Email Campaign Manager**: Web application on port 5000
@@ -85,20 +94,26 @@ Configured for Replit Autoscale deployment:
 - Celery workers handle background tasks
 
 ## Recent Changes (November 27, 2025)
+- **Intelligent Hourly Rate Limit Retry** ✅
+  - Detects 451 rate limit errors from SMTP servers
+  - Sets automatic 1-hour retry for rate-limited emails
+  - Works with all SMTP providers (Hostinger, SendGrid, Gmail, Mailgun, etc.)
+  - Email stays 'pending' but skipped during hourly limit cooldown
+  - Automatically retries when 1 hour has passed
+  - Prevents wasted retry attempts that count against provider limits
+  
 - **Ultra-Conservative Rate Limiting Configuration** ✅
-  - Configured system for low SMTP rate limit accounts (Hostinger)
-  - Reduced Celery concurrency to 1 worker (sequential processing)
-  - Increased per-email delay to 15 seconds (respects provider limits)
-  - Reduced batch sizes from 50 to 20 emails
-  - Added 1-second spacing between batch dispatches
-  - **Smart rate limit handling**: Skips retries on 451 rate limit errors (retries count against limit)
-  - **No retries on failure**: Tasks don't retry - providers get overwhelmed with duplicate attempts
-  - Connection refresh rate: 200 emails (minimizes reconnections)
-  - Added connection stabilization waits (0.5s) after connect/reconnect
+  - Celery concurrency: 1 worker (sequential processing)
+  - Per-email delay: 15 seconds (respects provider limits)
+  - Batch size: 20 emails (conservative for low-limit accounts)
+  - Batch dispatch spacing: 1 second (prevents thundering herd)
+  - Connection refresh: Every 200 emails (minimizes reconnections)
+  - Connection stabilization: 0.5s after connect/reconnect
+  
 - **Why This Works**: 
-  - Even with low SMTP rate limits, the system will send ALL emails eventually
-  - Takes longer (15-20s per email) but respects provider restrictions
-  - No wasted retry attempts that count against rate limits
+  - All emails eventually send—system doesn't abandon them
+  - Takes longer (15-20s per email) but respects all provider restrictions
+  - No wasted retries that count against hourly limits
   - Professional Celery backend ensures reliable queuing and delivery
 
 ## Performance & Scalability
