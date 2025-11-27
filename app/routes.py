@@ -204,7 +204,22 @@ def campaigns():
 def campaign_details(id):
     # Ensure user owns this campaign
     campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-    return render_template('campaign_details.html', campaign=campaign)
+    
+    # Calculate campaign stats
+    total = len(campaign.emails)
+    sent = sum(1 for e in campaign.emails if e.status == 'sent')
+    failed = sum(1 for e in campaign.emails if e.status == 'failed')
+    pending = total - sent - failed
+    
+    stats = {
+        'total': total,
+        'sent': sent,
+        'failed': failed,
+        'pending': pending,
+        'sent_pct': (sent / total * 100) if total > 0 else 0
+    }
+    
+    return render_template('campaign_details.html', campaign=campaign, stats=stats)
 
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
 @login_required

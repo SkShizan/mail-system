@@ -22,6 +22,57 @@
     </div>
 </div>
 
+<!-- Email Stats Section -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-info">{{ stats.total }}</div>
+                <div class="text-muted small">Total Emails</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-success">{{ stats.sent }}</div>
+                <div class="text-muted small">Sent ✅</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-warning">{{ stats.pending }}</div>
+                <div class="text-muted small">Pending ⏳</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-danger">{{ stats.failed }}</div>
+                <div class="text-muted small">Failed ❌</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Bar -->
+<div class="card glass mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <span class="fw-bold">Campaign Progress</span>
+            <span class="text-muted">{{ stats.sent_pct|round(1) }}%</span>
+        </div>
+        <div class="progress" style="height: 25px;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: {{ stats.sent_pct }}%;" aria-valuenow="{{ stats.sent_pct }}" aria-valuemin="0" aria-valuemax="100">
+                {{ stats.sent }} sent
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card glass">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="fas fa-list me-2"></i>Recipient List</span>
