@@ -84,33 +84,22 @@ Configured for Replit Autoscale deployment:
 - Uses PostgreSQL database for persistence
 - Celery workers handle background tasks
 
-## Recent Changes (November 25, 2025)
-- **Authentication & Multi-User Support** ✅
-  - Implemented secure login/signup system with Flask-Login
-  - Added User model with password hashing
-  - Per-user campaigns, emails, and SMTP settings
-  - Protected all routes with @login_required decorator
-  - Database migrations: Added user_id foreign keys to Campaign and SMTPSettings tables
-- **Celery + Redis Architecture** ✅
-  - Replaced simple threading scheduler with professional Celery task queue
-  - Added Redis as message broker for distributed task processing
-  - Implemented user-aware batch email processing
-  - Batch sender fetches correct SMTP settings per user
-  - Dispatcher groups emails by user to prevent mixing
-- **Debug Logging** ✅
-  - Extensive emoji-based logging throughout the system
-  - Scheduler logs every 10 seconds with pending email count
-  - Batch sender logs SMTP connection status, each email sent, and final stats
-  - IST to UTC conversion logging in routes
-- **Timezone Handling** ✅
-  - Automatic IST (Asia/Kolkata) to UTC conversion
-  - System stores all times in UTC internally
-  - User enters times in IST, system converts automatically
-- **Bug Fixes** ✅
-  - Fixed Celery Beat schedule configuration
-  - Fixed flask-login import errors
-  - Fixed database schema mismatches
-  - Fixed routing errors
+## Recent Changes (November 27, 2025)
+- **Ultra-Conservative Rate Limiting Configuration** ✅
+  - Configured system for low SMTP rate limit accounts (Hostinger)
+  - Reduced Celery concurrency to 1 worker (sequential processing)
+  - Increased per-email delay to 15 seconds (respects provider limits)
+  - Reduced batch sizes from 50 to 20 emails
+  - Added 1-second spacing between batch dispatches
+  - **Smart rate limit handling**: Skips retries on 451 rate limit errors (retries count against limit)
+  - **No retries on failure**: Tasks don't retry - providers get overwhelmed with duplicate attempts
+  - Connection refresh rate: 200 emails (minimizes reconnections)
+  - Added connection stabilization waits (0.5s) after connect/reconnect
+- **Why This Works**: 
+  - Even with low SMTP rate limits, the system will send ALL emails eventually
+  - Takes longer (15-20s per email) but respects provider restrictions
+  - No wasted retry attempts that count against rate limits
+  - Professional Celery backend ensures reliable queuing and delivery
 
 ## Performance & Scalability
 - **Multi-User Architecture**: Each user's emails processed independently with their own SMTP settings

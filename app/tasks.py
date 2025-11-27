@@ -105,6 +105,10 @@ def send_batch_task(self, email_ids):
     if not server:
         print("❌ SMTP failed — retrying whole task")
         return self.retry(countdown=60)
+    
+    # Small wait after connection to let server stabilize
+    import time as time_module
+    time_module.sleep(0.5)
 
     sent_count = 0
     failed_count = 0
@@ -112,7 +116,7 @@ def send_batch_task(self, email_ids):
     signature = settings.signature or ""
 
     # Keep SMTP alive limit - refresh less frequently to avoid auth storms
-    REFRESH_RATE = 100  # Only refresh after 100 emails, not 10
+    REFRESH_RATE = 200  # Only refresh after 200 emails to minimize reconnections
     counter = 0
 
     for email in emails:
@@ -137,6 +141,8 @@ def send_batch_task(self, email_ids):
                 email.status = 'failed'
                 failed_count += 1
                 continue
+            import time as time_module
+            time_module.sleep(0.5)  # Wait after reconnection
 
         # Build email
         msg = MIMEMultipart()
@@ -164,7 +170,7 @@ def send_batch_task(self, email_ids):
             failed_count += 1
 
         # Delay per provider rules (respect SMTP rate limits)
-        time.sleep(6.0)  # 6 seconds between emails to respect Hostinger rate limits
+        time.sleep(15.0)  # 15 seconds between emails - very conservative for low rate limit accounts
 
     # Save results
     db.session.commit()
@@ -206,10 +212,12 @@ def scheduler_dispatcher():
 
     total = 0
     for uid, ids in user_batches.items():
-        for i in range(0, len(ids), 50):
-            chunk = ids[i:i + 50]
+        for i in range(0, len(ids), 20):  # Smaller batches: 20 emails instead of 50
+            chunk = ids[i:i + 20]
             print(f"📦 Batch ({len(chunk)}) for UID {uid}")
             send_batch_task.delay(chunk)
             total += 1
+            import time as time_module
+            time_module.sleep(1)  # 1 second between batch dispatches
 
     return f"Dispatched {total} batches."
