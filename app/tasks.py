@@ -1,5 +1,6 @@
 import smtplib
 import time
+import sys
 from celery import shared_task
 from app import db
 from app.models import Email, SMTPSettings
@@ -164,10 +165,11 @@ def send_batch_task(self, email_ids):
             email.status = 'sent'
             sent_count += 1
             counter += 1
+            print(f"✅ {email.recipient} sent", flush=True)
         elif send_result == 'rate_limit':
             # Rate limit hit - set retry time to 1 hour from now, keep status as pending
             email.rate_limit_retry_at = datetime.now() + timedelta(hours=1)
-            print(f"⏱️ {email.recipient} will retry at {email.rate_limit_retry_at}")
+            print(f"⏱️ {email.recipient} rate limited → retry in 1 hour", flush=True)
             failed_count += 1
         elif send_result not in [True, False, 'rate_limit']:
             # New server connection returned
@@ -175,10 +177,12 @@ def send_batch_task(self, email_ids):
             email.status = 'sent'
             sent_count += 1
             counter += 1
+            print(f"✅ {email.recipient} sent (reconnected)", flush=True)
         else:
             # Other errors - mark as failed
             email.status = 'failed'
             failed_count += 1
+            print(f"❌ {email.recipient} failed", flush=True)
 
         # Delay per provider rules (respect SMTP rate limits)
         time.sleep(15.0)  # 15 seconds between emails - very conservative for low rate limit accounts
@@ -192,7 +196,8 @@ def send_batch_task(self, email_ids):
     except:
         pass
 
-    print(f"🧾 RESULT: {sent_count} sent | {failed_count} failed")
+    print(f"🧾 RESULT: {sent_count} sent | {failed_count} failed", flush=True)
+    sys.stdout.flush()
     return f"{sent_count} sent | {failed_count} failed"
 
 
