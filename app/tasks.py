@@ -218,8 +218,37 @@ def send_batch_task(self, email_ids):
         # Optimized: 4 seconds between emails with 2 workers = 30 emails/minute total
         time.sleep(4.0)  # 4 seconds between emails - optimized for speed
 
-    # Save results
-    db.session.commit()
+    # Save results - CRITICAL: use direct SQL updates for reliability in Celery context
+    try:
+        # First, commit ORM changes
+        db.session.flush()
+        
+        # Use direct SQL to update sent emails (most reliable in Celery)
+        sent_ids = [e.id for e in emails if e.status == 'sent']
+        if sent_ids:
+            from sqlalchemy import update
+            db.session.execute(update(Email).where(Email.id.in_(sent_ids)).values(status='sent'))
+        
+        # Update rate-limited emails with retry times
+        rate_limited_updates = {e.id: e.rate_limit_retry_at for e in emails if e.rate_limit_retry_at}
+        if rate_limited_updates:
+            for email_id, retry_at in rate_limited_updates.items():
+                db.session.execute(update(Email).where(Email.id == email_id).values(rate_limit_retry_at=retry_at))
+        
+        # Update failed emails
+        failed_ids = [e.id for e in emails if e.status == 'failed']
+        if failed_ids:
+            db.session.execute(update(Email).where(Email.id.in_(failed_ids)).values(status='failed'))
+        
+        # Finally commit everything
+        db.session.commit()
+        print(f"💾 Database commit successful ({sent_count} sent, {failed_count} failed)", flush=True)
+    except Exception as e:
+        print(f"❌ DATABASE COMMIT ERROR: {e}", flush=True)
+        db.session.rollback()
+        print(f"❌ Rolled back all changes due to error", flush=True)
+        sys.stdout.flush()
+        raise  # Re-raise so Celery knows task failed
 
     # Close connection
     try:

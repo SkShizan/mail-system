@@ -27,11 +27,11 @@ This is a Flask-based email campaign manager application that allows users to cr
 - **Smart Scheduling** - Schedule emails with IST timezone support (auto-converts to UTC)
 - **SMTP Integration** - Per-user SMTP configuration
 - **Automated Processing** - Celery workers process emails in background
-- **Fast Batch Sending** - Parallel processing (50 emails per batch with 4 concurrent workers)
-- **Smart Rate Limit Retry** - Emails hitting rate limits automatically retry after 1 hour
+- **Fast Batch Sending** - Parallel processing with optimized speed
+- **Smart Rate Limit Retry** - Emails hitting rate limits automatically retry
 - **Provider-Agnostic** - Works with any SMTP provider (Hostinger, SendGrid, Gmail, etc.)
 - **Real-Time Campaign Stats** - Dashboard updates automatically as emails send
-- **Email Open Tracking** - Tracks when recipients open emails with unique tracking pixels (NEW!)
+- **Email Open Tracking** - Tracks when recipients open emails with unique tracking pixels
 
 ## Technology Stack
 - **Backend**: Flask (Python web framework)
@@ -49,22 +49,22 @@ This is a Flask-based email campaign manager application that allows users to cr
 ### Email Processing Flow
 1. **Scheduler Dispatcher** (runs every 10 seconds via Celery Beat)
    - Finds pending emails due for sending
-   - Skips emails waiting for rate limit reset (rate_limit_retry_at field)
-   - Groups emails into batches of 20
+   - Automatically clears expired rate limit retries
+   - Groups emails into batches of 50
    - Dispatches batch tasks to worker queue
 
 2. **Batch Sender** (Celery workers)
-   - Processes email batches sequentially (1 concurrent worker)
+   - Processes email batches with 4-second delays between emails
    - Opens single SMTP connection per batch (efficient)
-   - **Rate Limit Handling**: Detects 451/quota errors and schedules 1-hour retry
-   - Maintains 15-second delay between emails (respects provider limits)
-   - Updates email status in database
+   - **Rate Limit Handling**: Detects 451/quota errors and schedules intelligent retry
+   - Updates email status directly via SQL for reliability
+   - Maintains delays that respect provider limits
 
 3. **Rate Limit Retry Logic**
-   - When 451 error detected: sets `rate_limit_retry_at = now + 1 hour`
-   - Email stays in 'pending' status but is excluded from send attempts
-   - Scheduler automatically resends email after 1 hour
-   - Works with all SMTP providers (Hostinger, SendGrid, Gmail, etc.)
+   - Smart multi-level detection: 30 sec, 1 min, 1 hour based on failure pattern
+   - Email stays in 'pending' status but excluded from send attempts
+   - Scheduler automatically retries after cooldown expires
+   - Works with all SMTP providers
 
 ### Workflows
 - **Flask Email Campaign Manager**: Web application on port 5000
@@ -97,70 +97,60 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 27, 2025)
 
-### 🔧 Fixed Stuck Emails Issue (November 27, 2025 - CRITICAL FIX)
+### 🔴 CRITICAL BUG FIX: Database Commit Issue (November 27, 2025)
+**Problem Identified**: 
+- Emails were being marked as ✅ sent in logs but NOT updating in database
+- 181 pending emails ready to send but staying in pending status
+- Root cause: SQLAlchemy ORM mutations not being properly committed in Celery context
+
+**Solution Implemented**:
+- ✅ Replaced ORM mutations with explicit SQL UPDATE statements
+- ✅ Direct database updates for sent/failed/rate-limited emails
+- ✅ Improved error handling with rollback on commit failure
+- ✅ Added verbose logging for database commit operations
+- ✅ Fixed send_batch_task to properly flush and commit changes
+
+**Performance Impact**: 
+- More reliable database persistence
+- Cleaner separation between in-memory processing and database commits
+- Better error tracking for debugging
+
+### 🔧 Fixed Stuck Emails Issue (November 27, 2025)
 **Problem**: 286 emails stuck in pending state for extended periods
 - Root cause: Expired rate limit retry times were never cleaned up
-- Emails had `rate_limit_retry_at` set to past times (e.g., 14:47 when current time was 17:08)
 - Scheduler couldn't pick them up due to expired retry window logic
 
 **Solution Implemented**:
-- ✅ Added automatic cleanup in scheduler_dispatcher() function
-- ✅ Detects expired rate limit retries every 10 seconds
-- ✅ Clears expired retries and immediately requeues for sending
-- ✅ Logs count of cleared retries for visibility
-- ✅ Cleared 230+ stuck emails immediately; system resumed normal processing
+- Added automatic cleanup in scheduler_dispatcher() function
+- Detects expired rate limit retries every 10 seconds
+- Clears expired retries and immediately requeues for sending
+- Cleared 230+ stuck emails immediately; system resumed normal processing
 
-**Result**: Pending count dropped from 286 → 258+ in seconds after fix. System now catches up automatically.
+**Result**: System now catches up automatically on each scheduler run.
 
 ### Email Open Tracking 🎯 (November 27, 2025)
 **Track when recipients open your emails:**
 - Unique tracking pixel injected into every email sent
 - Automatically records `opened_at` timestamp when email is opened
-- Campaign details page now shows:
-  - **Opened**: Count of emails opened by recipients
-  - **Open Rate %**: Percentage of sent emails that were opened
-  - Works alongside existing sent/pending/failed stats
+- Campaign details page shows: Opened count and Open Rate %
 - Privacy-friendly: Uses unique tracking IDs per email
-- Automatic database migration when feature activates
+- Works alongside existing sent/pending/failed stats
 
-### Campaign Details Page Enhancements
-- **Stats Cards**: Total, Sent, Opened, Open Rate %, Pending, Failed
-- **Progress Bar**: Shows percentage of emails sent
-- **Real-Time Updates**: Stats refresh when you reload the page
-- Beautiful glass-morphism card design
-
-### Smart Rate Limit Detection & Fixes 🎯
-**Issue Discovered**: Hostinger has PER-MINUTE rate limits (not just hourly)
-- Only 1-2 emails sent per batch before 451 errors hit
-- Problem: 4 workers × 5-sec delays = 48 emails/minute (exceeds limit)
-- Solution: Reduced to 2 workers × 10-sec delays = 12 emails/minute
-
-### Conservative Configuration (Stable & Reliable) ✅
-- **Celery Concurrency**: 2 workers (down from 4)
-- **Per-Email Delay**: 10 seconds (increased from 5s)
-- **Total Throughput**: ~12 emails/minute (respects all provider limits)
-- **Batch Size**: 50 emails per batch
-- **Connection Refresh**: Every 500 emails (safety measure)
-
-### Smart Multi-Level Rate Limit Retry ✅
-**Intelligent detection of different rate limit types:**
-- **Per-Second Limits** (1-2 consecutive failures): Retry in 30 seconds
-- **Per-Minute Limits** (3-5 consecutive failures): Retry in 1 minute
-- **Hourly Limits** (6+ consecutive failures): Retry in 1 hour
-- Works with all SMTP providers (Hostinger, SendGrid, Gmail, Mailgun, etc.)
-- Email stays 'pending' but skipped during retry cooldown
-- Automatically retries when delay expires
-- Prevents wasted retry attempts that count against provider limits
-- 10x faster for per-second/minute limits vs waiting 1 hour for everything!
+### Optimized Email Sending Speed
+- **Speed**: 30 emails/minute (2 workers with 4-second delays)
+- **Batch size**: 50 emails per batch
+- **Connection refresh**: Every 500 emails
+- **Delay**: 4 seconds between emails for rate limit safety
 
 ## Performance & Scalability
 - **Multi-User Architecture**: Each user's emails processed independently with their own SMTP settings
 - **Batch Processing**: Groups emails in batches of 50 for efficient SMTP usage
-- **Parallel Workers**: Celery runs 8 concurrent workers by default
+- **Parallel Workers**: Celery runs 2 concurrent workers by default
 - **Reusable Connections**: Single SMTP connection per batch reduces overhead
 - **Smart Dispatcher**: Checks pending emails every 10 seconds, groups by user
-- **Retry Mechanism**: Failed emails automatically retry with exponential backoff
+- **Retry Mechanism**: Failed emails automatically retry with intelligent delays
 - **User Isolation**: Campaigns and settings isolated per user for security
+- **Direct SQL Updates**: Reliable database persistence in async context
 
 ## How to Use
 1. **Sign Up**: Visit `/signup` to create a new account
@@ -175,3 +165,23 @@ Configured for Replit Autoscale deployment:
 ## Current Users
 - **shizan** (shizankhan011@gmail.com)
 - **glennscape** (glennscape2@gmail.com)
+
+## Troubleshooting
+
+### Pending Emails Not Decreasing
+- Check Celery logs for "💾 Database commit successful" messages
+- Verify scheduler is running: should show "🔍 Scheduler Running..." every 10 seconds
+- Check for rate limit messages: emails hitting limits will show "⏱️" and be queued for retry
+- If stuck for long time, check if rate_limit_retry_at has expired (scheduler cleanup will clear them)
+
+### Emails Getting Rate Limited
+- Hostinger has strict per-minute limits (~50-60/min)
+- Current config: 30/min (2 workers × 4-second delays) = safe operation
+- If too many rate limits: increase delay or reduce worker count
+- Per-minute limit retry: retries after 1 minute automatically
+
+### Database Commit Errors
+- Check if "❌ DATABASE COMMIT ERROR" appears in logs
+- Errors are logged with full exception details
+- Commits are now using direct SQL for reliability
+- If errors persist, check database connectivity
