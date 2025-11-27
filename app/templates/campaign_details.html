@@ -24,15 +24,15 @@
 
 <!-- Email Stats Section -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card glass text-center">
             <div class="card-body">
                 <div class="fs-4 fw-bold text-info">{{ stats.total }}</div>
-                <div class="text-muted small">Total Emails</div>
+                <div class="text-muted small">Total</div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card glass text-center">
             <div class="card-body">
                 <div class="fs-4 fw-bold text-success">{{ stats.sent }}</div>
@@ -40,7 +40,23 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-primary">{{ stats.opened }}</div>
+                <div class="text-muted small">Opened 📧</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-4 fw-bold text-info">{{ stats.open_rate|round(1) }}%</div>
+                <div class="text-muted small">Open Rate</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card glass text-center">
             <div class="card-body">
                 <div class="fs-4 fw-bold text-warning">{{ stats.pending }}</div>
@@ -48,7 +64,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card glass text-center">
             <div class="card-body">
                 <div class="fs-4 fw-bold text-danger">{{ stats.failed }}</div>

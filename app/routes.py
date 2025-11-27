@@ -1,9 +1,10 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_file
 from flask_login import current_user, login_user, logout_user, login_required
 from app import db, login
 from app.models import Email, SMTPSettings, Campaign, User
 from datetime import datetime, timedelta
 import pytz
+from io import BytesIO
 
 user_tz = pytz.timezone("Asia/Kolkata")
 utc = pytz.UTC
@@ -209,14 +210,17 @@ def campaign_details(id):
     total = len(campaign.emails)
     sent = sum(1 for e in campaign.emails if e.status == 'sent')
     failed = sum(1 for e in campaign.emails if e.status == 'failed')
+    opened = sum(1 for e in campaign.emails if e.opened_at is not None)
     pending = total - sent - failed
     
     stats = {
         'total': total,
         'sent': sent,
         'failed': failed,
+        'opened': opened,
         'pending': pending,
-        'sent_pct': (sent / total * 100) if total > 0 else 0
+        'sent_pct': (sent / total * 100) if total > 0 else 0,
+        'open_rate': (opened / sent * 100) if sent > 0 else 0
     }
     
     return render_template('campaign_details.html', campaign=campaign, stats=stats)
@@ -421,3 +425,19 @@ def add_emails_to_campaign(id):
     db.session.commit()
     flash(f"Added {emails_added} new emails to campaign.", "success")
     return redirect(url_for('main.campaign_details', id=id))
+
+# --- TRACKING ENDPOINT ---
+
+@bp.route('/track/<tracking_id>')
+def track_open(tracking_id):
+    """Record email open when tracking pixel is loaded"""
+    email = Email.query.filter_by(tracking_id=tracking_id).first()
+    if email and not email.opened_at:
+        email.opened_at = datetime.utcnow()
+        db.session.commit()
+    
+    # Return 1x1 transparent pixel
+    pixel = BytesIO()
+    pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
+    pixel.seek(0)
+    return send_file(pixel, mimetype='image/gif')

@@ -31,6 +31,7 @@ This is a Flask-based email campaign manager application that allows users to cr
 - **Smart Rate Limit Retry** - Emails hitting rate limits automatically retry after 1 hour
 - **Provider-Agnostic** - Works with any SMTP provider (Hostinger, SendGrid, Gmail, etc.)
 - **Real-Time Campaign Stats** - Dashboard updates automatically as emails send
+- **Email Open Tracking** - Tracks when recipients open emails with unique tracking pixels (NEW!)
 
 ## Technology Stack
 - **Backend**: Flask (Python web framework)
@@ -96,6 +97,23 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 27, 2025)
 
+### Email Open Tracking 🎯 (November 27, 2025 - NEW)
+**Track when recipients open your emails:**
+- Unique tracking pixel injected into every email sent
+- Automatically records `opened_at` timestamp when email is opened
+- Campaign details page now shows:
+  - **Opened**: Count of emails opened by recipients
+  - **Open Rate %**: Percentage of sent emails that were opened
+  - Works alongside existing sent/pending/failed stats
+- Privacy-friendly: Uses unique tracking IDs per email
+- Automatic database migration when feature activates
+
+### Campaign Details Page Enhancements
+- **Stats Cards**: Total, Sent, Opened, Open Rate %, Pending, Failed
+- **Progress Bar**: Shows percentage of emails sent
+- **Real-Time Updates**: Stats refresh when you reload the page
+- Beautiful glass-morphism card design
+
 ### Smart Rate Limit Detection & Fixes 🎯
 **Issue Discovered**: Hostinger has PER-MINUTE rate limits (not just hourly)
 - Only 1-2 emails sent per batch before 451 errors hit
@@ -109,7 +127,7 @@ Configured for Replit Autoscale deployment:
 - **Batch Size**: 50 emails per batch
 - **Connection Refresh**: Every 500 emails (safety measure)
 
-### Smart Multi-Level Rate Limit Retry ✅ (November 27, 2025)
+### Smart Multi-Level Rate Limit Retry ✅
 **Intelligent detection of different rate limit types:**
 - **Per-Second Limits** (1-2 consecutive failures): Retry in 30 seconds
 - **Per-Minute Limits** (3-5 consecutive failures): Retry in 1 minute

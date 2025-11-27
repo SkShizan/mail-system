@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from collections import defaultdict
+import uuid
+import os
 
 # ---------------------------
 # Helper Functions
@@ -151,13 +153,18 @@ def send_batch_task(self, email_ids):
             import time as time_module
             time_module.sleep(0.5)  # Wait after reconnection
 
-        # Build email
+        # Generate tracking ID if not exists
+        if not email.tracking_id:
+            email.tracking_id = str(uuid.uuid4())
+        
+        # Build email with tracking pixel
         msg = MIMEMultipart()
         msg['From'] = from_email
         msg['To'] = email.recipient
         msg['Subject'] = email.subject
 
-        body_content = (email.body or "") + (f"<br><br>{signature}" if signature else "")
+        tracking_pixel = f"<img src='{os.getenv('DOMAIN', 'http://localhost:5000')}/track/{email.tracking_id}' width='1' height='1' style='display:none;' />"
+        body_content = (email.body or "") + tracking_pixel + (f"<br><br>{signature}" if signature else "")
         msg.attach(MIMEText(body_content, 'html'))
 
         # Send safely
