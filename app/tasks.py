@@ -121,7 +121,7 @@ def send_batch_task(self, email_ids):
     signature = settings.signature or ""
 
     # Keep SMTP alive limit - refresh less frequently to avoid auth storms
-    REFRESH_RATE = 200  # Only refresh after 200 emails to minimize reconnections
+    REFRESH_RATE = 500  # Only refresh after 500 emails to minimize reconnections
     counter = 0
 
     for email in emails:
@@ -185,7 +185,7 @@ def send_batch_task(self, email_ids):
             print(f"❌ {email.recipient} failed", flush=True)
 
         # Delay per provider rules (respect SMTP rate limits)
-        time.sleep(15.0)  # 15 seconds between emails - very conservative for low rate limit accounts
+        time.sleep(5.0)  # 5 seconds between emails - with hourly rate limit retry, this is safe
 
     # Save results
     db.session.commit()
@@ -243,12 +243,12 @@ def scheduler_dispatcher():
 
     total = 0
     for uid, ids in user_batches.items():
-        for i in range(0, len(ids), 20):  # Smaller batches: 20 emails instead of 50
-            chunk = ids[i:i + 20]
+        for i in range(0, len(ids), 50):  # Larger batches: 50 emails for faster processing
+            chunk = ids[i:i + 50]
             print(f"📦 Batch ({len(chunk)}) for UID {uid}")
             send_batch_task.delay(chunk)
             total += 1
             import time as time_module
-            time_module.sleep(1)  # 1 second between batch dispatches
+            time_module.sleep(0.5)  # 0.5 second between batch dispatches
 
     return f"Dispatched {total} batches."

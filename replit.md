@@ -27,9 +27,10 @@ This is a Flask-based email campaign manager application that allows users to cr
 - **Smart Scheduling** - Schedule emails with IST timezone support (auto-converts to UTC)
 - **SMTP Integration** - Per-user SMTP configuration
 - **Automated Processing** - Celery workers process emails in background
-- **Batch Sending** - Efficient batch processing (20 emails per batch)
+- **Fast Batch Sending** - Parallel processing (50 emails per batch with 4 concurrent workers)
 - **Smart Rate Limit Retry** - Emails hitting rate limits automatically retry after 1 hour
 - **Provider-Agnostic** - Works with any SMTP provider (Hostinger, SendGrid, Gmail, etc.)
+- **Real-Time Campaign Stats** - Dashboard updates automatically as emails send
 
 ## Technology Stack
 - **Backend**: Flask (Python web framework)
@@ -94,27 +95,28 @@ Configured for Replit Autoscale deployment:
 - Celery workers handle background tasks
 
 ## Recent Changes (November 27, 2025)
-- **Intelligent Hourly Rate Limit Retry** ✅
-  - Detects 451 rate limit errors from SMTP servers
-  - Sets automatic 1-hour retry for rate-limited emails
-  - Works with all SMTP providers (Hostinger, SendGrid, Gmail, Mailgun, etc.)
-  - Email stays 'pending' but skipped during hourly limit cooldown
-  - Automatically retries when 1 hour has passed
-  - Prevents wasted retry attempts that count against provider limits
-  
-- **Ultra-Conservative Rate Limiting Configuration** ✅
-  - Celery concurrency: 1 worker (sequential processing)
-  - Per-email delay: 15 seconds (respects provider limits)
-  - Batch size: 20 emails (conservative for low-limit accounts)
-  - Batch dispatch spacing: 1 second (prevents thundering herd)
-  - Connection refresh: Every 200 emails (minimizes reconnections)
-  - Connection stabilization: 0.5s after connect/reconnect
-  
-- **Why This Works**: 
-  - All emails eventually send—system doesn't abandon them
-  - Takes longer (15-20s per email) but respects all provider restrictions
-  - No wasted retries that count against hourly limits
-  - Professional Celery backend ensures reliable queuing and delivery
+
+### Fast Email Processing 🚀
+- **Parallel Workers**: Increased from 1 to 4 concurrent workers
+- **Faster Per-Email Delay**: Reduced from 15s to 5s (with hourly rate limit retry safety)
+- **Larger Batches**: Increased from 20 to 50 emails per batch
+- **Batch Dispatch**: 0.5s spacing between dispatches
+- **Result**: ~10-15x faster email processing speed!
+
+### Intelligent Hourly Rate Limit Retry ✅
+- Detects 451 rate limit errors from SMTP servers
+- Sets automatic 1-hour retry for rate-limited emails
+- Works with all SMTP providers (Hostinger, SendGrid, Gmail, Mailgun, etc.)
+- Email stays 'pending' but skipped during hourly limit cooldown
+- Automatically retries when 1 hour has passed
+- Prevents wasted retry attempts that count against provider limits
+
+### Dynamic Configuration ✅
+- Celery concurrency: 4 workers (parallel processing)
+- Per-email delay: 5 seconds (optimized with rate limit retry)
+- Batch size: 50 emails (faster batches)
+- Connection refresh: Every 500 emails (minimizes reconnections)
+- **All features work with any SMTP provider!**
 
 ## Performance & Scalability
 - **Multi-User Architecture**: Each user's emails processed independently with their own SMTP settings
