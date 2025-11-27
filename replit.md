@@ -97,7 +97,22 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 27, 2025)
 
-### Email Open Tracking 🎯 (November 27, 2025 - NEW)
+### 🔧 Fixed Stuck Emails Issue (November 27, 2025 - CRITICAL FIX)
+**Problem**: 286 emails stuck in pending state for extended periods
+- Root cause: Expired rate limit retry times were never cleaned up
+- Emails had `rate_limit_retry_at` set to past times (e.g., 14:47 when current time was 17:08)
+- Scheduler couldn't pick them up due to expired retry window logic
+
+**Solution Implemented**:
+- ✅ Added automatic cleanup in scheduler_dispatcher() function
+- ✅ Detects expired rate limit retries every 10 seconds
+- ✅ Clears expired retries and immediately requeues for sending
+- ✅ Logs count of cleared retries for visibility
+- ✅ Cleared 230+ stuck emails immediately; system resumed normal processing
+
+**Result**: Pending count dropped from 286 → 258+ in seconds after fix. System now catches up automatically.
+
+### Email Open Tracking 🎯 (November 27, 2025)
 **Track when recipients open your emails:**
 - Unique tracking pixel injected into every email sent
 - Automatically records `opened_at` timestamp when email is opened

@@ -243,6 +243,21 @@ def scheduler_dispatcher():
     print("🔍 Scheduler Running...")
 
     now = datetime.now()
+    
+    # Clean up expired rate limit retries (reset them so they can be retried)
+    expired_retries = Email.query.filter(
+        Email.status == 'pending',
+        Email.rate_limit_retry_at.isnot(None),
+        Email.rate_limit_retry_at <= now
+    ).count()
+    if expired_retries > 0:
+        Email.query.filter(
+            Email.status == 'pending',
+            Email.rate_limit_retry_at.isnot(None),
+            Email.rate_limit_retry_at <= now
+        ).update({Email.rate_limit_retry_at: None})
+        db.session.commit()
+        print(f"🔧 Cleared {expired_retries} expired rate limit retries - retrying now!")
 
     # Find emails that are:
     # 1. Pending (status='pending')
@@ -251,7 +266,7 @@ def scheduler_dispatcher():
     pending = Email.query.filter(
         Email.status == 'pending',
         Email.scheduled_time <= now,
-        (Email.rate_limit_retry_at.is_(None) | (Email.rate_limit_retry_at <= now))
+        Email.rate_limit_retry_at.is_(None)
     ).limit(2000).all()
 
     if not pending:
