@@ -36,12 +36,20 @@ def safe_send(server, msg, recipient, settings, retry=1):
     """
     Try sending an email. If connection dies, reconnect and retry once.
     Returns True if sent, False otherwise.
+    Skips retry on rate limit errors (451) since retry also gets rate limited.
     """
     try:
         server.send_message(msg)
         return True
 
     except Exception as e:
+        error_str = str(e)
+        
+        # Check for rate limit error - don't retry, just fail
+        if "451" in error_str or "Ratelimit" in error_str:
+            print(f"❌ {recipient} rate limited — skipping retry")
+            return False
+        
         print(f"⚠ {recipient} send failed: {e} — retrying...")
 
         # Close broken connection
@@ -66,7 +74,7 @@ def safe_send(server, msg, recipient, settings, retry=1):
 # ---------------------------
 # Batch Worker Task
 # ---------------------------
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=0)
 def send_batch_task(self, email_ids):
     print("\n" + "="*60)
     print(f"📨 SEND BATCH: {len(email_ids)} emails")
@@ -156,7 +164,7 @@ def send_batch_task(self, email_ids):
             failed_count += 1
 
         # Delay per provider rules (respect SMTP rate limits)
-        time.sleep(3.0)  # 3 seconds between emails to avoid rate limiting & auth storms
+        time.sleep(6.0)  # 6 seconds between emails to respect Hostinger rate limits
 
     # Save results
     db.session.commit()
