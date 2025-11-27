@@ -215,8 +215,8 @@ def send_batch_task(self, email_ids):
 
         # Delay per provider rules (respect SMTP rate limits)
         # Hostinger: Per-minute throttling + per-second limits
-        # Conservative: 10 seconds between emails with 2 workers = 12 emails/minute total
-        time.sleep(10.0)  # 10 seconds between emails - safe for all providers
+        # Optimized: 4 seconds between emails with 2 workers = 30 emails/minute total
+        time.sleep(4.0)  # 4 seconds between emails - optimized for speed
 
     # Save results
     db.session.commit()
