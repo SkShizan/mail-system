@@ -2,9 +2,13 @@ from app import create_app, db
 
 app = create_app()
 
-# Create DB tables if they don't exist
-with app.app_context():
-    db.create_all()
+# Create DB tables if they don't exist (with error handling)
+try:
+    with app.app_context():
+        db.create_all()
+        print("✓ Database tables created/verified successfully")
+except Exception as e:
+    print(f"⚠ Warning: Could not create database tables: {e}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
