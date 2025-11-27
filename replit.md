@@ -109,13 +109,16 @@ Configured for Replit Autoscale deployment:
 - **Batch Size**: 50 emails per batch
 - **Connection Refresh**: Every 500 emails (safety measure)
 
-### Intelligent Hourly Rate Limit Retry ✅
-- Detects 451 rate limit errors from SMTP servers
-- Sets automatic 1-hour retry for rate-limited emails
+### Smart Multi-Level Rate Limit Retry ✅ (November 27, 2025)
+**Intelligent detection of different rate limit types:**
+- **Per-Second Limits** (1-2 consecutive failures): Retry in 30 seconds
+- **Per-Minute Limits** (3-5 consecutive failures): Retry in 1 minute
+- **Hourly Limits** (6+ consecutive failures): Retry in 1 hour
 - Works with all SMTP providers (Hostinger, SendGrid, Gmail, Mailgun, etc.)
-- Email stays 'pending' but skipped during hourly limit cooldown
-- Automatically retries when 1 hour has passed
+- Email stays 'pending' but skipped during retry cooldown
+- Automatically retries when delay expires
 - Prevents wasted retry attempts that count against provider limits
+- 10x faster for per-second/minute limits vs waiting 1 hour for everything!
 
 ## Performance & Scalability
 - **Multi-User Architecture**: Each user's emails processed independently with their own SMTP settings

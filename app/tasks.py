@@ -117,6 +117,8 @@ def send_batch_task(self, email_ids):
 
     sent_count = 0
     failed_count = 0
+    rate_limited_count = 0
+    consecutive_rate_limits = 0  # Track consecutive rate limit hits
     from_email = settings.default_sender
     signature = settings.signature or ""
 
@@ -165,11 +167,29 @@ def send_batch_task(self, email_ids):
             email.status = 'sent'
             sent_count += 1
             counter += 1
+            consecutive_rate_limits = 0  # Reset counter on successful send
             print(f"✅ {email.recipient} sent", flush=True)
         elif send_result == 'rate_limit':
-            # Rate limit hit - set retry time to 1 hour from now, keep status as pending
-            email.rate_limit_retry_at = datetime.now() + timedelta(hours=1)
-            print(f"⏱️ {email.recipient} rate limited → retry in 1 hour", flush=True)
+            # Rate limit hit - detect type and set intelligent retry
+            consecutive_rate_limits += 1
+            rate_limited_count += 1
+            
+            # Smart retry logic based on consecutive failures
+            if consecutive_rate_limits <= 2:
+                # 1-2 failures = likely per-second limit
+                retry_delay = timedelta(seconds=30)
+                retry_msg = "30 seconds"
+            elif consecutive_rate_limits <= 5:
+                # 3-5 failures = likely per-minute limit
+                retry_delay = timedelta(minutes=1)
+                retry_msg = "1 minute"
+            else:
+                # 6+ failures = likely per-hour limit
+                retry_delay = timedelta(hours=1)
+                retry_msg = "1 hour"
+            
+            email.rate_limit_retry_at = datetime.now() + retry_delay
+            print(f"⏱️ {email.recipient} rate limited → retry in {retry_msg}", flush=True)
             failed_count += 1
         elif send_result not in [True, False, 'rate_limit']:
             # New server connection returned
@@ -177,11 +197,13 @@ def send_batch_task(self, email_ids):
             email.status = 'sent'
             sent_count += 1
             counter += 1
+            consecutive_rate_limits = 0  # Reset counter on successful send
             print(f"✅ {email.recipient} sent (reconnected)", flush=True)
         else:
-            # Other errors - mark as failed
+            # Other errors - mark as failed (not rate limit related)
             email.status = 'failed'
             failed_count += 1
+            consecutive_rate_limits = 0  # Reset counter on other errors
             print(f"❌ {email.recipient} failed", flush=True)
 
         # Delay per provider rules (respect SMTP rate limits)
@@ -198,7 +220,9 @@ def send_batch_task(self, email_ids):
     except:
         pass
 
-    print(f"🧾 RESULT: {sent_count} sent | {failed_count} failed", flush=True)
+    rate_limit_pct = (rate_limited_count / len(emails) * 100) if emails else 0
+    print(f"🧾 RESULT: {sent_count} sent | {failed_count} failed ({rate_limited_count} rate limited)", flush=True)
+    print(f"📊 Rate limit: {rate_limit_pct:.0f}% of batch", flush=True)
     sys.stdout.flush()
     return f"{sent_count} sent | {failed_count} failed"
 
