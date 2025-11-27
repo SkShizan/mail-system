@@ -153,8 +153,8 @@ def send_batch_task(self, email_ids):
             email.status = 'failed'
             failed_count += 1
 
-        # Delay per provider rules
-        time.sleep(0.5)
+        # Delay per provider rules (respect SMTP rate limits)
+        time.sleep(2.0)  # 2 seconds between emails to avoid rate limiting
 
     # Save results
     db.session.commit()
