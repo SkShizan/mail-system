@@ -6,7 +6,8 @@ load_dotenv()
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
 
-    # Use Replit's built-in PostgreSQL database
+    # DIRECTLY set the URL here to force Supabase
+    # Ensure you replace 'postgres://' with 'postgresql://' if needed (SQLAlchemy sometimes requires the 'ql')
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'postgresql://localhost/nexus'
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
