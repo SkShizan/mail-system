@@ -47,6 +47,7 @@ class Email(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     batch_id = db.Column(db.String(50), nullable=True)
     campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=True)
+    rate_limit_retry_at = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<Email {self.id} to {self.recipient}>'

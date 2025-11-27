@@ -3,7 +3,7 @@ import time
 from celery import shared_task
 from app import db
 from app.models import Email, SMTPSettings
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from collections import defaultdict
@@ -35,8 +35,8 @@ def create_smtp_connection(settings):
 def safe_send(server, msg, recipient, settings, retry=1):
     """
     Try sending an email. If connection dies, reconnect and retry once.
-    Returns True if sent, False otherwise.
-    Skips retry on rate limit errors (451) since retry also gets rate limited.
+    Returns: True if sent, False if other error, 'rate_limit' if 451 error
+    Rate limit errors need smart retry (wait 1 hour), not immediate retry.
     """
     try:
         server.send_message(msg)
@@ -45,10 +45,10 @@ def safe_send(server, msg, recipient, settings, retry=1):
     except Exception as e:
         error_str = str(e)
         
-        # Check for rate limit error - don't retry, just fail
-        if "451" in error_str or "Ratelimit" in error_str:
-            print(f"❌ {recipient} rate limited — skipping retry")
-            return False
+        # Check for rate limit error - return special indicator for hourly retry
+        if "451" in error_str or "Ratelimit" in error_str or "quota" in error_str.lower():
+            print(f"⏱️ {recipient} rate limited — will retry after 1 hour")
+            return 'rate_limit'
         
         print(f"⚠ {recipient} send failed: {e} — retrying...")
 
@@ -67,6 +67,10 @@ def safe_send(server, msg, recipient, settings, retry=1):
             new_server.send_message(msg)
             return new_server  # return the new live connection
         except Exception as e:
+            error_str2 = str(e)
+            if "451" in error_str2 or "Ratelimit" in error_str2 or "quota" in error_str2.lower():
+                print(f"⏱️ {recipient} rate limited on retry — will retry after 1 hour")
+                return 'rate_limit'
             print(f"❌ Second attempt failed ({recipient}): {e}")
             return False
 
@@ -156,16 +160,23 @@ def send_batch_task(self, email_ids):
         # Send safely
         send_result = safe_send(server, msg, email.recipient, settings)
 
-        if send_result is True or send_result:
+        if send_result is True:
             email.status = 'sent'
             sent_count += 1
             counter += 1
-
-            # Replace server if safe_send returned a new one (means reconnection happened)
-            if send_result not in [True, False]:
-                server = send_result  
-
+        elif send_result == 'rate_limit':
+            # Rate limit hit - set retry time to 1 hour from now, keep status as pending
+            email.rate_limit_retry_at = datetime.now() + timedelta(hours=1)
+            print(f"⏱️ {email.recipient} will retry at {email.rate_limit_retry_at}")
+            failed_count += 1
+        elif send_result not in [True, False, 'rate_limit']:
+            # New server connection returned
+            server = send_result
+            email.status = 'sent'
+            sent_count += 1
+            counter += 1
         else:
+            # Other errors - mark as failed
             email.status = 'failed'
             failed_count += 1
 
@@ -195,13 +206,28 @@ def scheduler_dispatcher():
 
     now = datetime.now()
 
+    # Find emails that are:
+    # 1. Pending (status='pending')
+    # 2. Scheduled time passed
+    # 3. NOT in rate limit retry wait (rate_limit_retry_at is NULL or has passed)
     pending = Email.query.filter(
         Email.status == 'pending',
-        Email.scheduled_time <= now
+        Email.scheduled_time <= now,
+        (Email.rate_limit_retry_at.is_(None) | (Email.rate_limit_retry_at <= now))
     ).limit(2000).all()
 
     if not pending:
-        print("✓ No pending emails.")
+        print("✓ No pending emails ready to send.")
+        
+        # Show how many are waiting for rate limit reset
+        rate_limited = Email.query.filter(
+            Email.status == 'pending',
+            Email.rate_limit_retry_at.isnot(None),
+            Email.rate_limit_retry_at > now
+        ).count()
+        if rate_limited > 0:
+            print(f"⏱️ {rate_limited} emails waiting for rate limit reset...")
+        
         return "Idle"
 
     user_batches = defaultdict(list)
