@@ -103,19 +103,21 @@ def send_batch_task(self, email_ids):
     from_email = settings.default_sender
     signature = settings.signature or ""
 
-    # Keep SMTP alive limit
-    REFRESH_RATE = 10  
+    # Keep SMTP alive limit - refresh less frequently to avoid auth storms
+    REFRESH_RATE = 100  # Only refresh after 100 emails, not 10
     counter = 0
 
     for email in emails:
 
-        # Periodically refresh connection
+        # Periodically refresh connection (very rarely to avoid rate limiting)
         if counter >= REFRESH_RATE:
             print("🔄 Refresh SMTP connection (safety refresh)")
             try:
                 server.quit()
             except:
                 pass
+            import time as time_module
+            time_module.sleep(2.0)  # Wait before reconnecting
             server = create_smtp_connection(settings)
             counter = 0
 
@@ -154,7 +156,7 @@ def send_batch_task(self, email_ids):
             failed_count += 1
 
         # Delay per provider rules (respect SMTP rate limits)
-        time.sleep(2.0)  # 2 seconds between emails to avoid rate limiting
+        time.sleep(3.0)  # 3 seconds between emails to avoid rate limiting & auth storms
 
     # Save results
     db.session.commit()

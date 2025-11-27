@@ -15,6 +15,7 @@ class Config:
     # Celery Configuration
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or 'redis://localhost:6379/0'
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND') or 'redis://localhost:6379/0'
+    CELERYD_CONCURRENCY = 4  # Reduced from 8 to respect SMTP rate limits
 
     CELERY_BEAT_SCHEDULE = {
         'check-every-10-seconds': {
