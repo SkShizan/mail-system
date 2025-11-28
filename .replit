@@ -56,3 +56,8 @@ externalPort = 3000
 [deployment]
 deploymentTarget = "autoscale"
 run = ["python", "run.py"]
+
+[userenv]
+
+[userenv.shared]
+DOMAIN = "https://a7ff0562-31a0-413a-8373-baa92ec162e8-00-3vnuaq6ftdldr.pike.replit.dev"

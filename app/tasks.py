@@ -168,7 +168,8 @@ def send_batch_task(self, email_ids):
         msg['To'] = email.recipient
         msg['Subject'] = email.subject
 
-        tracking_pixel = f"<img src='{os.getenv('DOMAIN', 'http://localhost:5000')}/track/{email.tracking_id}' width='1' height='1' style='display:none;' />"
+        domain = os.getenv('DOMAIN', 'https://localhost:5000')
+        tracking_pixel = f"<img src='{domain}/track/{email.tracking_id}' width='1' height='1' style='display:none;' />"
         body_content = (email.body or "") + tracking_pixel + (f"<br><br>{signature}" if signature else "")
         msg.attach(MIMEText(body_content, 'html'))
 
