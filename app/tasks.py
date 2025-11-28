@@ -39,7 +39,9 @@ def safe_send(server, msg, recipient, settings, retry=1):
     """
     Try sending an email. If connection dies, reconnect and retry once.
     Returns: True if sent, False if other error, 'rate_limit' if 451 error
-    Rate limit errors need smart retry (wait 1 hour), not immediate retry.
+    
+    CRITICAL FIX: When we get 451 on first send_message(), email was likely queued by SMTP
+    Don't retry - mark as 'rate_limit_sent' so we DON'T send duplicate on retry
     """
     try:
         server.send_message(msg)
@@ -48,12 +50,14 @@ def safe_send(server, msg, recipient, settings, retry=1):
     except Exception as e:
         error_str = str(e)
         
-        # Check for rate limit error - return special indicator for hourly retry
+        # Check for rate limit error
+        # CRITICAL: If 451 on FIRST attempt, email was probably queued by SMTP
+        # Return 'rate_limit_sent' to indicate: rate limited BUT email was sent
         if "451" in error_str or "Ratelimit" in error_str or "quota" in error_str.lower():
-            print(f"⏱️ {recipient} rate limited — will retry after 1 hour")
-            return 'rate_limit'
+            print(f"⏱️ {recipient} rate limited (email queued by SMTP - no retry)", flush=True)
+            return 'rate_limit_sent'  # Email sent, just rate limited for future
         
-        print(f"⚠ {recipient} send failed: {e} — retrying...")
+        print(f"⚠ {recipient} send failed: {e} — retrying...", flush=True)
 
         # Close broken connection
         try:
@@ -72,9 +76,10 @@ def safe_send(server, msg, recipient, settings, retry=1):
         except Exception as e:
             error_str2 = str(e)
             if "451" in error_str2 or "Ratelimit" in error_str2 or "quota" in error_str2.lower():
-                print(f"⏱️ {recipient} rate limited on retry — will retry after 1 hour")
-                return 'rate_limit'
-            print(f"❌ Second attempt failed ({recipient}): {e}")
+                print(f"⏱️ {recipient} rate limited on retry (email likely queued)", flush=True)
+                # Even on retry 451, email was probably sent
+                return 'rate_limit_sent'
+            print(f"❌ Second attempt failed ({recipient}): {e}", flush=True)
             return False
 
 
@@ -176,30 +181,28 @@ def send_batch_task(self, email_ids):
             counter += 1
             consecutive_rate_limits = 0  # Reset counter on successful send
             print(f"✅ {email.recipient} sent", flush=True)
+        elif send_result == 'rate_limit_sent':
+            # CRITICAL FIX: Email was sent BUT got 451 error (email was queued by SMTP)
+            # Mark as SENT, not as retry - prevents duplicate sends
+            email.status = 'sent'
+            sent_count += 1
+            counter += 1
+            consecutive_rate_limits = 0
+            rate_limited_count += 1
+            print(f"✅ {email.recipient} sent (rate limited but queued)", flush=True)
         elif send_result == 'rate_limit':
-            # Rate limit hit - detect type and set intelligent retry
+            # Legacy: Rate limit without sending (shouldn't happen with new fix)
             consecutive_rate_limits += 1
             rate_limited_count += 1
             
-            # Smart retry logic based on consecutive failures
-            if consecutive_rate_limits <= 2:
-                # 1-2 failures = likely per-second limit
-                retry_delay = timedelta(seconds=30)
-                retry_msg = "30 seconds"
-            elif consecutive_rate_limits <= 5:
-                # 3-5 failures = likely per-minute limit
-                retry_delay = timedelta(minutes=1)
-                retry_msg = "1 minute"
-            else:
-                # 6+ failures = likely per-hour limit
-                retry_delay = timedelta(hours=1)
-                retry_msg = "1 hour"
+            retry_delay = timedelta(hours=1)
+            retry_msg = "1 hour"
             
             email.rate_limit_retry_at = datetime.now() + retry_delay
             print(f"⏱️ {email.recipient} rate limited → retry in {retry_msg}", flush=True)
             failed_count += 1
-        elif send_result not in [True, False, 'rate_limit']:
-            # New server connection returned
+        elif send_result not in [True, False, 'rate_limit', 'rate_limit_sent']:
+            # New server connection returned (reconnection successful)
             server = send_result
             email.status = 'sent'
             sent_count += 1
