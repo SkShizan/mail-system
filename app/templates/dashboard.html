@@ -56,20 +56,61 @@
 
 {% block scripts %}
 <script>
-// Auto-refresh stats every 5 seconds
+// Real-time stats refresh with visual feedback
 function refreshStats() {
-    fetch('/api/stats')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('stat-sent').textContent = data.sent;
-            document.getElementById('stat-pending').textContent = data.pending;
-            document.getElementById('stat-failed').textContent = data.failed;
-        })
-        .catch(error => console.error('Error fetching stats:', error));
+    fetch('/api/stats?v=' + Date.now(), {
+        method: 'GET',
+        headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('API error');
+        return response.json();
+    })
+    .then(data => {
+        const sentEl = document.getElementById('stat-sent');
+        const pendingEl = document.getElementById('stat-pending');
+        const failedEl = document.getElementById('stat-failed');
+        
+        if (sentEl && sentEl.textContent !== String(data.sent)) {
+            sentEl.textContent = data.sent;
+            sentEl.style.animation = 'none';
+            setTimeout(() => sentEl.style.animation = 'pulse 0.5s', 10);
+        }
+        if (pendingEl && pendingEl.textContent !== String(data.pending)) {
+            pendingEl.textContent = data.pending;
+            pendingEl.style.animation = 'none';
+            setTimeout(() => pendingEl.style.animation = 'pulse 0.5s', 10);
+        }
+        if (failedEl && failedEl.textContent !== String(data.failed)) {
+            failedEl.textContent = data.failed;
+            failedEl.style.animation = 'none';
+            setTimeout(() => failedEl.style.animation = 'pulse 0.5s', 10);
+        }
+    })
+    .catch(error => {
+        console.error('Stats update failed:', error);
+    });
 }
 
-// Refresh immediately, then every 5 seconds
-refreshStats();
-setInterval(refreshStats, 5000);
+// Add pulse animation
+const style = document.createElement('style');
+style.innerHTML = `
+    @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.05); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+`;
+document.head.appendChild(style);
+
+// Refresh immediately on load, then every 2 seconds
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refreshStats);
+} else {
+    refreshStats();
+}
+setInterval(refreshStats, 2000);
 </script>
 {% endblock %}
