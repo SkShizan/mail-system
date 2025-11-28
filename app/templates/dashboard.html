@@ -3,7 +3,7 @@
 {% block content %}
 <h2 class="mb-4">Dashboard Overview</h2>
 <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card glass mb-4">
             <div class="card-body text-center py-5">
                 <div class="display-4 text-success mb-2">
@@ -14,7 +14,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card glass mb-4">
             <div class="card-body text-center py-5">
                 <div class="display-4 text-warning mb-2">
@@ -25,7 +25,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card glass mb-4">
             <div class="card-body text-center py-5">
                 <div class="display-4 text-danger mb-2">
@@ -33,6 +33,17 @@
                 </div>
                 <h1 class="display-5 fw-bold" id="stat-failed">{{ stats.failed }}</h1>
                 <p class="text-muted mb-0">Failed Attempts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass mb-4" id="processing-card">
+            <div class="card-body text-center py-5">
+                <div class="display-4 mb-2" id="processing-icon">
+                    <i class="fas fa-paper-plane" style="color: #6c757d;"></i>
+                </div>
+                <h1 class="display-5 fw-bold" id="stat-processing">Idle</h1>
+                <p class="text-muted mb-0">Status</p>
             </div>
         </div>
     </div>
@@ -72,6 +83,9 @@ function refreshStats() {
         const sentEl = document.getElementById('stat-sent');
         const pendingEl = document.getElementById('stat-pending');
         const failedEl = document.getElementById('stat-failed');
+        const processingEl = document.getElementById('stat-processing');
+        const processingIcon = document.getElementById('processing-icon');
+        const processingCard = document.getElementById('processing-card');
         
         if (sentEl && sentEl.textContent !== String(data.sent)) {
             sentEl.textContent = data.sent;
@@ -88,19 +102,41 @@ function refreshStats() {
             failedEl.style.animation = 'none';
             setTimeout(() => failedEl.style.animation = 'pulse 0.5s', 10);
         }
+        
+        // Update processing status
+        if (data.processing) {
+            processingEl.textContent = 'Sending...';
+            processingEl.style.color = '#28a745';
+            processingIcon.innerHTML = '<i class="fas fa-paper-plane" style="color: #28a745;"></i>';
+            processingIcon.style.animation = 'sending 0.6s infinite';
+            processingCard.style.borderColor = '#28a745';
+            processingCard.style.boxShadow = '0 0 15px rgba(40, 167, 69, 0.3)';
+        } else {
+            processingEl.textContent = 'Idle';
+            processingEl.style.color = '#6c757d';
+            processingIcon.innerHTML = '<i class="fas fa-paper-plane" style="color: #6c757d;"></i>';
+            processingIcon.style.animation = 'none';
+            processingCard.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            processingCard.style.boxShadow = 'none';
+        }
     })
     .catch(error => {
         console.error('Stats update failed:', error);
     });
 }
 
-// Add pulse animation
+// Add animations
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes pulse {
         0% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.7; transform: scale(1.05); }
         100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes sending {
+        0% { transform: translateX(0) rotate(0deg); opacity: 1; }
+        50% { transform: translateX(5px) rotate(-5deg); opacity: 0.8; }
+        100% { transform: translateX(0) rotate(0deg); opacity: 1; }
     }
 `;
 document.head.appendChild(style);

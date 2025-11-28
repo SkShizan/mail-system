@@ -65,13 +65,16 @@ def get_stats_api():
     my_campaign_ids = [c.id for c in current_user.campaigns]
     
     if not my_campaign_ids:
-        stats = {'sent': 0, 'pending': 0, 'failed': 0}
+        stats = {'sent': 0, 'pending': 0, 'failed': 0, 'processing': False}
     else:
         stats = {
             'sent': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='sent').count(),
             'pending': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='pending').count(),
             'failed': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='failed').count()
         }
+        # Processing status: show as processing if there are pending emails scheduled
+        stats['processing'] = stats['pending'] > 0 or stats['sent'] > 0
+    
     return jsonify(stats)
 
 # --- APPLICATION ROUTES (Protected) ---

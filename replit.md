@@ -97,6 +97,19 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 28, 2025)
 
+### 🎨 Real-Time Processing Status Indicator (November 28, 2025)
+**Added to Frontend Dashboard:**
+- New 4th status card showing "Sending..." or "Idle"
+- Animated plane icon with green glow when emails are being processed
+- Shows real-time processing status every 2 seconds
+- Users now see exactly what's happening: pending emails → being sent → completed
+- Smooth animations and visual feedback
+
+**Why This Matters:**
+- Terminal shows "Pending = 0" because emails are processed in batches continuously
+- Frontend now reflects the actual system activity
+- Users understand emails ARE being sent even when pending count is 0
+
 ### 🔧 CRITICAL FIX: Scheduler Timezone Bug (November 28, 2025)
 **Problem**:
 - 24 pending emails stuck and not being sent
