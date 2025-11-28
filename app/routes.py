@@ -261,6 +261,39 @@ def campaign_details(id):
     
     return render_template('campaign_details.html', campaign=campaign, stats=stats)
 
+@bp.route('/api/campaign/<int:id>/stats')
+@login_required
+def campaign_stats_api(id):
+    """Detailed campaign stats API for real-time charts"""
+    campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    
+    total = len(campaign.emails)
+    sent = sum(1 for e in campaign.emails if e.status == 'sent')
+    failed = sum(1 for e in campaign.emails if e.status == 'failed')
+    opened = sum(1 for e in campaign.emails if e.opened_at is not None)
+    pending = total - sent - failed
+    processing = pending > 0 or sent > 0
+    
+    # Batch info
+    batches = db.session.query(Email.batch_id, db.func.count(Email.id)).filter(
+        Email.campaign_id == id,
+        Email.batch_id != None
+    ).group_by(Email.batch_id).count()
+    
+    return jsonify({
+        'total': total,
+        'sent': sent,
+        'failed': failed,
+        'opened': opened,
+        'pending': pending,
+        'processing': processing,
+        'sent_pct': round((sent / total * 100), 1) if total > 0 else 0,
+        'failed_pct': round((failed / total * 100), 1) if total > 0 else 0,
+        'pending_pct': round((pending / total * 100), 1) if total > 0 else 0,
+        'open_rate': round((opened / sent * 100), 1) if sent > 0 else 0,
+        'batches_processed': batches
+    })
+
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
 @login_required
 def retry_task(id):

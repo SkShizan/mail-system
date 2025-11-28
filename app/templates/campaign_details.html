@@ -74,16 +74,76 @@
     </div>
 </div>
 
-<!-- Progress Bar -->
+<!-- Progress Bar & Charts Section -->
 <div class="card glass mb-4">
     <div class="card-body">
         <div class="d-flex justify-content-between mb-2">
             <span class="fw-bold">Campaign Progress</span>
-            <span class="text-muted">{{ stats.sent_pct|round(1) }}%</span>
+            <span class="text-muted" id="progress-pct">{{ stats.sent_pct|round(1) }}%</span>
         </div>
         <div class="progress" style="height: 25px;">
-            <div class="progress-bar bg-success" role="progressbar" style="width: {{ stats.sent_pct }}%;" aria-valuenow="{{ stats.sent_pct }}" aria-valuemin="0" aria-valuemax="100">
-                {{ stats.sent }} sent
+            <div class="progress-bar bg-success" id="progress-bar" role="progressbar" style="width: {{ stats.sent_pct }}%;" aria-valuenow="{{ stats.sent_pct }}" aria-valuemin="0" aria-valuemax="100">
+                <span id="progress-text">{{ stats.sent }} sent</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Charts Section -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card glass">
+            <div class="card-header"><i class="fas fa-chart-pie me-2"></i>Email Distribution</div>
+            <div class="card-body">
+                <canvas id="distributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card glass">
+            <div class="card-header"><i class="fas fa-chart-bar me-2"></i>Delivery Status</div>
+            <div class="card-body">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Stats Section -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-5 fw-bold text-success" id="stat-sent-val">{{ stats.sent }}</div>
+                <div class="text-muted small">Sent ✅</div>
+                <div class="text-muted tiny" id="stat-sent-pct">{{ stats.sent_pct|round(1) }}%</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-5 fw-bold text-danger" id="stat-failed-val">{{ stats.failed }}</div>
+                <div class="text-muted small">Failed ❌</div>
+                <div class="text-muted tiny" id="stat-failed-pct">{{ (stats.failed / stats.total * 100)|round(1) if stats.total > 0 else 0 }}%</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-5 fw-bold text-warning" id="stat-pending-val">{{ stats.pending }}</div>
+                <div class="text-muted small">Pending ⏳</div>
+                <div class="text-muted tiny" id="stat-pending-pct">{{ (stats.pending / stats.total * 100)|round(1) if stats.total > 0 else 0 }}%</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card glass text-center">
+            <div class="card-body">
+                <div class="fs-5 fw-bold text-primary" id="stat-opened-val">{{ stats.opened }}</div>
+                <div class="text-muted small">Opened 📧</div>
+                <div class="text-muted tiny" id="stat-open-rate">{{ stats.open_rate|round(1) }}%</div>
             </div>
         </div>
     </div>
@@ -207,7 +267,11 @@
 
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
+const campaignId = {{ campaign.id }};
+let distributionChart, statusChart;
+
 /* ----------- Modal Control ----------- */
 function openAddMoreModal() {
     document.getElementById("addMoreModal").style.display = "block";
@@ -227,35 +291,118 @@ function deleteEmail(id) {
         });
 }
 
+/* ----------- Real-Time Stats Update ----------- */
+function updateCampaignStats() {
+    fetch(`/api/campaign/${campaignId}/stats?v=` + Date.now(), {
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        // Update card values
+        document.getElementById('stat-sent-val').textContent = data.sent;
+        document.getElementById('stat-sent-pct').textContent = data.sent_pct + '%';
+        document.getElementById('stat-failed-val').textContent = data.failed;
+        document.getElementById('stat-failed-pct').textContent = data.failed_pct + '%';
+        document.getElementById('stat-pending-val').textContent = data.pending;
+        document.getElementById('stat-pending-pct').textContent = data.pending_pct + '%';
+        document.getElementById('stat-opened-val').textContent = data.opened;
+        document.getElementById('stat-open-rate').textContent = data.open_rate + '%';
+        
+        // Update progress bar
+        document.getElementById('progress-bar').style.width = data.sent_pct + '%';
+        document.getElementById('progress-pct').textContent = data.sent_pct + '%';
+        document.getElementById('progress-text').textContent = data.sent + ' sent';
+        
+        // Update charts
+        if (distributionChart) {
+            distributionChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
+            distributionChart.update('none');
+        }
+        if (statusChart) {
+            statusChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
+            statusChart.update('none');
+        }
+    })
+    .catch(err => console.error('Stats update failed:', err));
+}
+
+/* ----------- Initialize Charts ----------- */
+function initCharts() {
+    const ctxDist = document.getElementById('distributionChart').getContext('2d');
+    distributionChart = new Chart(ctxDist, {
+        type: 'doughnut',
+        data: {
+            labels: ['Sent ✅', 'Failed ❌', 'Pending ⏳'],
+            datasets: [{
+                data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
+                borderColor: ['#20c997', '#e74c3c', '#ff9800'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { labels: { color: '#aaa', font: { size: 12 } } }
+            }
+        }
+    });
+
+    const ctxStatus = document.getElementById('statusChart').getContext('2d');
+    statusChart = new Chart(ctxStatus, {
+        type: 'bar',
+        data: {
+            labels: ['Sent', 'Failed', 'Pending'],
+            datasets: [{
+                label: 'Count',
+                data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
+                borderColor: ['#20c997', '#e74c3c', '#ff9800'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#aaa' } },
+                y: { grid: { display: false }, ticks: { color: '#aaa' } }
+            }
+        }
+    });
+}
+
 /* ----------- Dynamic Client-Side Search ----------- */
 document.getElementById('tableSearchInput').addEventListener('keyup', function() {
-    // 1. Get the search term and convert to lowercase
     const searchValue = this.value.toLowerCase();
-    
-    // 2. Get all rows that contain data
     const rows = document.querySelectorAll('.searchable-row');
     let hasVisibleRow = false;
 
     rows.forEach(row => {
-        // 3. Get the text content of the row (combines Recipient, Subject, Status, etc.)
         const rowText = row.textContent.toLowerCase();
-
-        // 4. Check if the row text contains the search term
         if (rowText.includes(searchValue)) {
-            row.style.display = ""; // Show row
+            row.style.display = "";
             hasVisibleRow = true;
         } else {
-            row.style.display = "none"; // Hide row
+            row.style.display = "none";
         }
     });
 
-    // 5. Handle "No Results" message
     const noResultsRow = document.getElementById('noResultsRow');
     if (!hasVisibleRow) {
-        noResultsRow.style.display = ""; // Show 'No results' if everything else is hidden
+        noResultsRow.style.display = "";
     } else {
         noResultsRow.style.display = "none";
     }
 });
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', initCharts);
+setInterval(updateCampaignStats, 2000); // Update every 2 seconds
 </script>
 {% endblock %}

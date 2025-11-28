@@ -97,6 +97,22 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 28, 2025)
 
+### 📊 Comprehensive Campaign Analytics with Charts (November 28, 2025)
+**New detailed campaign analytics page with:**
+- **Doughnut Chart** - Email distribution (Sent/Failed/Pending)
+- **Bar Chart** - Delivery status breakdown with counts
+- **Progress Bar** - Real-time campaign completion tracking
+- **4 Stat Cards** - Sent, Failed, Pending, Opened with percentages
+- **Real-time Updates** - Charts refresh every 2 seconds via API
+- **Batch Processing Info** - Track total batches processed
+- **Search functionality** - Filter recipient list by status/email
+
+**Features:**
+- Automatic chart updates as emails process
+- Color-coded status indicators (green=sent, red=failed, yellow=pending)
+- Open rate calculation (tracked emails / sent)
+- Responsive design works on all devices
+
 ### 🎨 Real-Time Processing Status Indicator (November 28, 2025)
 **Added to Frontend Dashboard:**
 - New 4th status card showing "Sending..." or "Idle"
