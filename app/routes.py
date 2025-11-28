@@ -301,10 +301,14 @@ def track_email_open(tracking_id):
     if email and not email.opened_at:
         email.opened_at = datetime.utcnow()
         db.session.commit()
+        import sys
+        print(f"✅ TRACKED: Email {email.id} opened via {tracking_id}", file=sys.stderr)
     
     # Return 1x1 transparent GIF pixel
-    gif = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
-    return gif, 200, {'Content-Type': 'image/gif'}
+    pixel = BytesIO()
+    pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
+    pixel.seek(0)
+    return send_file(pixel, mimetype='image/gif', cache_control='no-cache, no-store, must-revalidate')
 
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
 @login_required
@@ -507,18 +511,3 @@ def add_emails_to_campaign(id):
     flash(f"Added {emails_added} new emails to campaign.", "success")
     return redirect(url_for('main.campaign_details', id=id))
 
-# --- TRACKING ENDPOINT ---
-
-@bp.route('/track/<tracking_id>')
-def track_open(tracking_id):
-    """Record email open when tracking pixel is loaded"""
-    email = Email.query.filter_by(tracking_id=tracking_id).first()
-    if email and not email.opened_at:
-        email.opened_at = datetime.utcnow()
-        db.session.commit()
-    
-    # Return 1x1 transparent pixel
-    pixel = BytesIO()
-    pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
-    pixel.seek(0)
-    return send_file(pixel, mimetype='image/gif')
