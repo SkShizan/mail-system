@@ -113,6 +113,26 @@ Configured for Replit Autoscale deployment:
 - Open rate calculation (tracked emails / sent)
 - Responsive design works on all devices
 
+### 🎯 Email Open Tracking FIXED (November 28, 2025)
+**Critical bug fixes for email tracking system:**
+- **Fixed tracking ID persistence**: Tracking IDs now properly saved to database after emails send
+- **Added tracking endpoint**: New `/track/<tracking_id>` route handles pixel requests and updates `opened_at` timestamp
+- **Works with all mail clients**: Transparent 1x1 GIF pixel is privacy-friendly and compatible everywhere
+- **Real-time open tracking**: Dashboard displays accurate open rate as emails are read
+
+**How it works:**
+1. Each email gets unique UUID tracking_id (generated and saved during send)
+2. Tracking pixel embedded in email body (invisible to recipient)
+3. When email is opened, pixel loads and hits `/track` endpoint
+4. System records `opened_at` timestamp in database
+5. Dashboard shows open count and open rate (opened / sent × 100%)
+
+**Previous Issues Fixed:**
+- ✅ Tracking IDs were generated but NOT saved to database
+- ✅ No `/track` endpoint existed to receive pixel requests
+- ✅ `opened_at` timestamps were never updated
+- ✅ Database now properly commits tracking data
+
 ### 🎨 Real-Time Processing Status Indicator (November 28, 2025)
 **Added to Frontend Dashboard:**
 - New 4th status card showing "Sending..." or "Idle"

@@ -294,6 +294,18 @@ def campaign_stats_api(id):
         'batches_processed': batches
     })
 
+@bp.route('/track/<tracking_id>', methods=['GET'])
+def track_email_open(tracking_id):
+    """Handle email open tracking pixel requests"""
+    email = Email.query.filter_by(tracking_id=tracking_id).first()
+    if email and not email.opened_at:
+        email.opened_at = datetime.utcnow()
+        db.session.commit()
+    
+    # Return 1x1 transparent GIF pixel
+    gif = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+    return gif, 200, {'Content-Type': 'image/gif'}
+
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
 @login_required
 def retry_task(id):

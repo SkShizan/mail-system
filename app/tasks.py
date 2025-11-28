@@ -243,6 +243,12 @@ def send_batch_task(self, email_ids):
         if failed_ids:
             db.session.execute(update(Email).where(Email.id.in_(failed_ids)).values(status='failed'))
         
+        # Save tracking IDs (CRITICAL for open tracking)
+        tracking_updates = {e.id: e.tracking_id for e in emails if e.tracking_id}
+        if tracking_updates:
+            for email_id, tracking_id in tracking_updates.items():
+                db.session.execute(update(Email).where(Email.id == email_id).values(tracking_id=tracking_id))
+        
         # Finally commit everything
         db.session.commit()
         print(f"💾 Database commit successful ({sent_count} sent, {failed_count} failed)", flush=True)
