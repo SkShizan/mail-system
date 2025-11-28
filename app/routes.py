@@ -175,8 +175,20 @@ def compose():
             flash('Please provide recipients or upload a file', 'warning')
             return redirect(url_for('main.compose'))
 
-        # Save to DB
+        # Deduplicate emails by recipient (prevent sending to same email twice)
+        seen_recipients = set()
+        unique_emails = []
+        duplicates_removed = 0
         for email_data in emails_to_send:
+            recipient_lower = email_data['recipient'].lower().strip()
+            if recipient_lower not in seen_recipients:
+                seen_recipients.add(recipient_lower)
+                unique_emails.append(email_data)
+            else:
+                duplicates_removed += 1
+
+        # Save to DB
+        for email_data in unique_emails:
             new_email = Email(
                 recipient=email_data['recipient'],
                 subject=email_data['subject'],
@@ -188,7 +200,10 @@ def compose():
             db.session.add(new_email)
 
         db.session.commit()
-        flash(f'Campaign "{campaign_name}" created with {len(emails_to_send)} emails.', 'success')
+        if duplicates_removed > 0:
+            flash(f'Campaign "{campaign_name}" created with {len(unique_emails)} emails. ({duplicates_removed} duplicates removed)', 'success')
+        else:
+            flash(f'Campaign "{campaign_name}" created with {len(unique_emails)} emails.', 'success')
         return redirect(url_for('main.campaigns'))
 
     return render_template('compose.html')
