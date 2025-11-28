@@ -162,16 +162,22 @@ def send_batch_task(self, email_ids):
         if not email.tracking_id:
             email.tracking_id = str(uuid.uuid4())
         
-        # Build email with tracking pixel
-        msg = MIMEMultipart()
+        # Build email with tracking pixel - PROPER MIME structure for Gmail compatibility
+        msg = MIMEMultipart('alternative')  # Must be 'alternative' for proper HTML rendering
         msg['From'] = from_email
         msg['To'] = email.recipient
         msg['Subject'] = email.subject
 
         domain = os.getenv('DOMAIN', 'https://localhost:5000')
-        tracking_pixel = f"<img src='{domain}/track/{email.tracking_id}' width='1' height='1' style='display:none;' />"
-        body_content = (email.body or "") + tracking_pixel + (f"<br><br>{signature}" if signature else "")
-        msg.attach(MIMEText(body_content, 'html'))
+        tracking_pixel = f"<img src='{domain}/track/{email.tracking_id}' width='1' height='1' style='display:none;' alt='' />"
+        html_body = (email.body or "") + tracking_pixel + (f"<br><br>{signature}" if signature else "")
+        
+        # Create plain text version (fallback for clients that don't support HTML)
+        plain_text = email.body.replace('<', '').replace('>', '').replace('&nbsp;', ' ') if email.body else ""
+        
+        # Attach both plain text and HTML (CRITICAL for Gmail to show "Display images" button)
+        msg.attach(MIMEText(plain_text, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
 
         # Send safely
         send_result = safe_send(server, msg, email.recipient, settings)
