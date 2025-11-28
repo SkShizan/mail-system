@@ -274,7 +274,7 @@ def scheduler_dispatcher():
     print("\n" + "="*80)
     print("🔍 Scheduler Running...")
 
-    now = datetime.now()
+    now = datetime.utcnow()  # FIXED: Use UTC to match database timestamps
     
     # Clean up expired rate limit retries (reset them so they can be retried)
     expired_retries = Email.query.filter(

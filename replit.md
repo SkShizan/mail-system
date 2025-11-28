@@ -95,7 +95,26 @@ Configured for Replit Autoscale deployment:
 - Uses PostgreSQL database for persistence
 - Celery workers handle background tasks
 
-## Recent Changes (November 27, 2025)
+## Recent Changes (November 28, 2025)
+
+### 🔧 CRITICAL FIX: Scheduler Timezone Bug (November 28, 2025)
+**Problem**:
+- 24 pending emails stuck and not being sent
+- Scheduler dispatcher not picking them up despite being scheduled for the past
+
+**Root Cause**: 
+- Scheduler used `datetime.now()` (local time) instead of `datetime.utcnow()` 
+- Database stores all timestamps in UTC
+- Time comparison failed: local time > UTC times, so emails never matched "scheduled_time <= now"
+
+**Solution**:
+- Changed scheduler_dispatcher to use `datetime.utcnow()`
+- Now correctly compares UTC timestamp from database
+
+**Result**:
+- ✅ 24 pending emails now being picked up and sent
+- ✅ Scheduler correctly identifies all ready-to-send emails
+- System fully operational
 
 ### 🔴 CRITICAL BUG FIX: Database Commit Issue (November 27, 2025)
 **Problem Identified**: 
