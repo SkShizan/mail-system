@@ -56,6 +56,24 @@ def logout():
     logout_user()
     return redirect(url_for('main.login'))
 
+# --- API ROUTES ---
+
+@bp.route('/api/stats')
+@login_required
+def get_stats_api():
+    """API endpoint that returns live stats for AJAX refresh"""
+    my_campaign_ids = [c.id for c in current_user.campaigns]
+    
+    if not my_campaign_ids:
+        stats = {'sent': 0, 'pending': 0, 'failed': 0}
+    else:
+        stats = {
+            'sent': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='sent').count(),
+            'pending': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='pending').count(),
+            'failed': Email.query.filter(Email.campaign_id.in_(my_campaign_ids), Email.status=='failed').count()
+        }
+    return jsonify(stats)
+
 # --- APPLICATION ROUTES (Protected) ---
 
 @bp.route('/')

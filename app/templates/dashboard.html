@@ -9,7 +9,7 @@
                 <div class="display-4 text-success mb-2">
                     <i class="fas fa-check-circle"></i>
                 </div>
-                <h1 class="display-5 fw-bold">{{ stats.sent }}</h1>
+                <h1 class="display-5 fw-bold" id="stat-sent">{{ stats.sent }}</h1>
                 <p class="text-muted mb-0">Emails Sent</p>
             </div>
         </div>
@@ -20,7 +20,7 @@
                 <div class="display-4 text-warning mb-2">
                     <i class="fas fa-clock"></i>
                 </div>
-                <h1 class="display-5 fw-bold">{{ stats.pending }}</h1>
+                <h1 class="display-5 fw-bold" id="stat-pending">{{ stats.pending }}</h1>
                 <p class="text-muted mb-0">Pending / Scheduled</p>
             </div>
         </div>
@@ -31,7 +31,7 @@
                 <div class="display-4 text-danger mb-2">
                     <i class="fas fa-exclamation-circle"></i>
                 </div>
-                <h1 class="display-5 fw-bold">{{ stats.failed }}</h1>
+                <h1 class="display-5 fw-bold" id="stat-failed">{{ stats.failed }}</h1>
                 <p class="text-muted mb-0">Failed Attempts</p>
             </div>
         </div>
@@ -51,4 +51,25 @@
         </div>
     </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh stats every 5 seconds
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('stat-sent').textContent = data.sent;
+            document.getElementById('stat-pending').textContent = data.pending;
+            document.getElementById('stat-failed').textContent = data.failed;
+        })
+        .catch(error => console.error('Error fetching stats:', error));
+}
+
+// Refresh immediately, then every 5 seconds
+refreshStats();
+setInterval(refreshStats, 5000);
+</script>
 {% endblock %}
