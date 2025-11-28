@@ -97,6 +97,25 @@ Configured for Replit Autoscale deployment:
 
 ## Recent Changes (November 28, 2025)
 
+### 🔴 CRITICAL FIX: Duplicate Email Loop (November 28, 2025)
+**Problem**: System was looping and sending emails to the same addresses 5+ times
+- Scheduler dispatcher was creating duplicate batch tasks for same pending emails
+- Multiple scheduler runs would re-dispatch emails before previous batch completed
+- Result: Some emails sent 5+ times to same recipient
+
+**Root Cause**: 
+- Scheduler didn't mark emails as "dispatched" before queuing batch tasks
+- Next scheduler run would find same pending emails (still status='pending') and re-dispatch them
+- No deduplication logic in place
+
+**Solution**:
+- ✅ Set batch_id BEFORE queuing task (marks email as dispatched)
+- ✅ Skip emails with batch_id already set in scheduler query
+- ✅ Prevents re-dispatch even if scheduler runs during batch processing
+- ✅ Each email now sent exactly ONCE per schedule
+
+**Result**: System now operates normally with 1 batch per dispatcher run
+
 ### 📊 Comprehensive Campaign Analytics with Charts (November 28, 2025)
 **New detailed campaign analytics page with:**
 - **Doughnut Chart** - Email distribution (Sent/Failed/Pending)

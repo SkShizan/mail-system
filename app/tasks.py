@@ -301,10 +301,12 @@ def scheduler_dispatcher():
     # 1. Pending (status='pending')
     # 2. Scheduled time passed
     # 3. NOT in rate limit retry wait (rate_limit_retry_at is NULL or has passed)
+    # 4. NOT already dispatched (batch_id is NULL - prevents duplicate sends)
     pending = Email.query.filter(
         Email.status == 'pending',
         Email.scheduled_time <= now,
-        Email.rate_limit_retry_at.is_(None)
+        Email.rate_limit_retry_at.is_(None),
+        Email.batch_id.is_(None)  # CRITICAL: Skip already-dispatched emails
     ).limit(2000).all()
 
     if not pending:
@@ -328,10 +330,18 @@ def scheduler_dispatcher():
             user_batches[email.campaign.owner.id].append(email.id)
 
     total = 0
+    batch_counter = 0
     for uid, ids in user_batches.items():
         for i in range(0, len(ids), 50):  # Larger batches: 50 emails for faster processing
             chunk = ids[i:i + 50]
-            print(f"📦 Batch ({len(chunk)}) for UID {uid}")
+            batch_id = f"batch_{uid}_{now.timestamp()}_{batch_counter}"
+            batch_counter += 1
+            
+            # CRITICAL: Mark emails as dispatched BEFORE queuing task (prevents re-dispatch on next scheduler run)
+            Email.query.filter(Email.id.in_(chunk)).update({Email.batch_id: batch_id})
+            db.session.commit()
+            
+            print(f"📦 Batch ({len(chunk)}) for UID {uid} → ID: {batch_id}")
             send_batch_task.delay(chunk)
             total += 1
             import time as time_module
