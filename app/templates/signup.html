@@ -1,30 +1,60 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-5">
-        <div class="card glass">
-            <div class="card-header text-center"><h3>Sign Up</h3></div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label>Username</label>
-                        <input type="text" name="username" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label>Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label>Password</label>
-                        <input type="password" name="password" class="form-control" required>
-                    </div>
-                    <button type="submit" class="btn btn-success w-100">Register</button>
-                </form>
-                <div class="mt-3 text-center">
-                    <a href="{{ url_for('main.login') }}">Already have an account? Login</a>
-                </div>
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-6 col-lg-5 col-xl-4">
+        
+        <!-- Logo / Brand Header -->
+        <div class="text-center mb-4">
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-dark p-3 mb-3 text-accent border border-secondary shadow-lg" style="width: 64px; height: 64px;">
+                <i class="fas fa-paper-plane fa-2x"></i>
             </div>
+            <h2 class="fw-bold text-white mb-1" style="letter-spacing: 1px;">Join Nexus</h2>
+            <p class="text-muted small">Start your email marketing journey today.</p>
         </div>
+
+        <!-- Main Glass Panel -->
+        <div class="glass-panel p-4 p-md-5">
+            <div class="card-header border-0 bg-transparent text-center pb-3">
+                <h3 class="fw-bold text-white">Sign Up</h3>
+            </div>
+            
+            <form method="POST">
+                <!-- Username -->
+                <div class="mb-3">
+                    <label class="form-label text-uppercase small fw-bold text-muted">Username</label>
+                    <input type="text" name="username" class="form-control" placeholder="Choose a username" required>
+                </div>
+
+                <!-- Email -->
+                <div class="mb-3">
+                    <label class="form-label text-uppercase small fw-bold text-muted">Email Address</label>
+                    <input type="email" name="email" class="form-control" placeholder="name@example.com" required>
+                </div>
+
+                <!-- Password -->
+                <div class="mb-4">
+                    <label class="form-label text-uppercase small fw-bold text-muted">Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Create a strong password" required>
+                </div>
+
+                <!-- Submit Action -->
+                <div class="d-grid mb-3">
+                    <button type="submit" class="btn btn-peach btn-lg shadow-lg">
+                        Register
+                    </button>
+                </div>
+
+                <!-- Footer Links -->
+                <div class="text-center mt-3 pt-3 border-top" style="border-color: rgba(255,255,255,0.05) !important;">
+                    <span class="text-muted small">Already have an account?</span>
+                    <a href="{{ url_for('main.login') }}" class="text-accent fw-bold text-decoration-none ms-1 hover-white">
+                        Login
+                    </a>
+                </div>
+            </form>
+        </div>
+        
     </div>
 </div>
 {% endblock %}

@@ -1,262 +1,368 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="/campaigns" class="text-decoration-none text-muted">
-        <i class="fas fa-arrow-left me-1"></i> Back to Campaigns
-    </a>
-</div>
+<style>
+    /* =========================================
+       GOD LEVEL DESIGN SYSTEM: REFINED
+       ========================================= */
+    :root {
+        --glass-surface: var(--card-bg);
+        --glass-border: var(--glass-border);
+        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        --text-cream: var(--text-primary);
+        --accent-glow: rgba(249, 180, 135, 0.4);
 
-<div class="card glass mb-4">
-    <div class="card-body d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="card-title">{{ campaign.name }}</h2>
-            <p class="text-muted mb-0">
-                Created on {{ campaign.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
-            </p>
-        </div>
+        /* Status Colors */
+        --status-success: #2ecc71;
+        --status-error: #ff6b6b;
+        --status-wait: #feca57;
+        --status-info: #3498db;
+    }
 
-        <button class="btn btn-primary" onclick="openAddMoreModal()">
-            <i class="fas fa-user-plus me-1"></i> Add More Emails
+    /* --- RESPONSIVE LAYOUT FIXES --- */
+    @media (max-width: 991px) {
+        .sidebar { transform: translateX(-100%); width: 0; padding: 0; }
+        .main-content { margin-left: 0 !important; padding: 1rem !important; width: 100%; }
+        .mobile-header-spacer { height: 60px; }
+    }
+
+    /* --- PREMIUM GLASS PANELS --- */
+    .glass-panel {
+        background: var(--glass-surface);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: var(--glass-border);
+        box-shadow: var(--glass-shadow);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    /* --- PAGINATION STYLES --- */
+    .pagination-custom .page-link {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-secondary);
+        margin: 0 5px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .pagination-custom .page-link:hover {
+        background: var(--accent-color);
+        color: #174143;
+        border-color: var(--accent-color);
+    }
+    .pagination-custom .page-item.active .page-link {
+        background: var(--accent-color);
+        color: #174143;
+        border-color: var(--accent-color);
+        font-weight: bold;
+    }
+    .pagination-custom .page-item.disabled .page-link {
+        background: transparent;
+        color: rgba(255,255,255,0.2);
+        border-color: rgba(255,255,255,0.05);
+    }
+
+    /* --- UTILITY CLASSES --- */
+    .stat-value {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(180deg, #fff, var(--text-primary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    .stat-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--accent-color);
+        font-weight: 700;
+        opacity: 0.9;
+    }
+    .btn-peach {
+        background: linear-gradient(135deg, var(--accent-color), #e59560);
+        color: #174143;
+        border: none;
+        font-weight: 700;
+        padding: 0.6rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px var(--accent-glow);
+        transition: all 0.3s ease;
+    }
+    .btn-glass-icon {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: var(--text-secondary);
+        width: 35px; height: 35px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        transition: 0.3s;
+    }
+    .btn-glass-icon:hover {
+        background: var(--accent-color);
+        color: #174143;
+    }
+    .table-container { overflow-x: auto; }
+    .table thead th {
+        background: rgba(0,0,0,0.2);
+        color: var(--accent-color);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+        padding: 1rem;
+    }
+    .table td { padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .badge-status { padding: 5px 12px; border-radius: 30px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; }
+    .badge-sent { background: rgba(46, 204, 113, 0.15); color: var(--status-success); border: 1px solid rgba(46, 204, 113, 0.3); }
+    .badge-failed { background: rgba(255, 107, 107, 0.15); color: var(--status-error); border: 1px solid rgba(255, 107, 107, 0.3); }
+    .badge-pending { background: rgba(254, 202, 87, 0.15); color: var(--status-wait); border: 1px solid rgba(254, 202, 87, 0.3); }
+    .badge-opened { background: rgba(52, 152, 219, 0.15); color: var(--status-info); border: 1px solid rgba(52, 152, 219, 0.3); }
+
+    .progress-container { background: rgba(0,0,0,0.3); border-radius: 50px; padding: 4px; }
+    .progress-fill { background: linear-gradient(90deg, var(--accent-color), #ff7e5f); height: 10px; border-radius: 50px; transition: width 1s ease; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-end mb-5 animate-in">
+    <div class="mb-3 mb-md-0">
+        <a href="/campaigns" class="text-decoration-none text-muted small mb-2 d-inline-block hover-accent">
+            <i class="fas fa-arrow-left me-2"></i>CAMPAIGNS
+        </a>
+        <h1 class="display-5 fw-bold text-white mb-1">{{ campaign.name }}</h1>
+        <p class="mb-0 text-muted font-monospace small">
+            <span class="text-accent">ID:</span> #{{ campaign.id }} &nbsp;|&nbsp; 
+            <span class="text-accent">CREATED:</span> {{ campaign.created_at.strftime('%b %d, %Y') }}
+        </p>
+    </div>
+    <div>
+        <button class="btn btn-peach w-100 w-md-auto" onclick="openAddMoreModal()">
+            <i class="fas fa-plus-circle me-2"></i>ADD RECIPIENTS
         </button>
     </div>
 </div>
 
-<!-- Email Stats Section -->
-<div class="row mb-4">
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-info">{{ stats.total }}</div>
-                <div class="text-muted small">Total</div>
-            </div>
+<div class="row g-3 mb-5 animate-in delay-1">
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total</div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-success">{{ stats.sent }}</div>
-                <div class="text-muted small">Sent ✅</div>
-            </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value" style="color: var(--status-success);">{{ stats.sent }}</div>
+            <div class="stat-label">Sent</div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-primary">{{ stats.opened }}</div>
-                <div class="text-muted small">Opened 📧</div>
-            </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value" style="color: var(--status-info);">{{ stats.opened }}</div>
+            <div class="stat-label">Opened</div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-info">{{ stats.open_rate|round(1) }}%</div>
-                <div class="text-muted small">Open Rate</div>
-            </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center position-relative">
+            <div class="stat-value text-white">{{ stats.open_rate|round(1) }}<span class="fs-6 text-muted">%</span></div>
+            <div class="stat-label">Open Rate</div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-warning">{{ stats.pending }}</div>
-                <div class="text-muted small">Pending ⏳</div>
-            </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value" style="color: var(--status-wait);">{{ stats.pending }}</div>
+            <div class="stat-label">Pending</div>
         </div>
     </div>
-    <div class="col-md-2">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-4 fw-bold text-danger">{{ stats.failed }}</div>
-                <div class="text-muted small">Failed ❌</div>
-            </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value" style="color: var(--status-error);">{{ stats.failed }}</div>
+            <div class="stat-label">Failed</div>
         </div>
     </div>
 </div>
 
-<!-- Progress Bar & Charts Section -->
-<div class="card glass mb-4">
-    <div class="card-body">
-        <div class="d-flex justify-content-between mb-2">
-            <span class="fw-bold">Campaign Progress</span>
-            <span class="text-muted" id="progress-pct">{{ stats.sent_pct|round(1) }}%</span>
-        </div>
-        <div class="progress" style="height: 25px;">
-            <div class="progress-bar bg-success" id="progress-bar" role="progressbar" style="width: {{ stats.sent_pct }}%;" aria-valuenow="{{ stats.sent_pct }}" aria-valuemin="0" aria-valuemax="100">
-                <span id="progress-text">{{ stats.sent }} sent</span>
+<div class="row g-4 mb-5 animate-in delay-2">
+    <div class="col-12 col-xl-4">
+        <div class="glass-panel h-100 p-4 d-flex flex-column justify-content-center">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fw-bold text-accent small text-uppercase">Delivery Velocity</span>
+                <span class="font-monospace text-white lead fw-bold" id="progress-pct">{{ stats.sent_pct|round(1) }}%</span>
             </div>
+            <div class="progress-container mb-3">
+                <div class="progress-fill" id="progress-bar" style="width: {{ stats.sent_pct }}%;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="glass-panel h-100 p-4">
+            <div class="d-flex align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-uppercase small text-accent">Distribution</h6>
+            </div>
+            <div style="height: 200px; position: relative;"><canvas id="distributionChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="glass-panel h-100 p-4">
+            <div class="d-flex align-items-center mb-3">
+                <h6 class="mb-0 fw-bold text-uppercase small text-accent">Status</h6>
+            </div>
+            <div style="height: 200px; position: relative;"><canvas id="statusChart"></canvas></div>
         </div>
     </div>
 </div>
 
-<!-- Analytics Charts Section -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card glass">
-            <div class="card-header"><i class="fas fa-chart-pie me-2"></i>Email Distribution</div>
-            <div class="card-body">
-                <canvas id="distributionChart"></canvas>
-            </div>
+<div class="glass-panel animate-in delay-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center p-4 border-bottom" style="border-color: rgba(255,255,255,0.05);">
+        <div class="mb-3 mb-md-0">
+            <h5 class="mb-0 fw-bold text-white"><i class="fas fa-users me-2 text-accent"></i>Recipient Manifest</h5>
+            <small class="text-muted">Showing page {{ pagination.page }} of {{ pagination.pages }}</small>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card glass">
-            <div class="card-header"><i class="fas fa-chart-bar me-2"></i>Delivery Status</div>
-            <div class="card-body">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Detailed Stats Section -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-5 fw-bold text-success" id="stat-sent-val">{{ stats.sent }}</div>
-                <div class="text-muted small">Sent ✅</div>
-                <div class="text-muted tiny" id="stat-sent-pct">{{ stats.sent_pct|round(1) }}%</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-5 fw-bold text-danger" id="stat-failed-val">{{ stats.failed }}</div>
-                <div class="text-muted small">Failed ❌</div>
-                <div class="text-muted tiny" id="stat-failed-pct">{{ (stats.failed / stats.total * 100)|round(1) if stats.total > 0 else 0 }}%</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-5 fw-bold text-warning" id="stat-pending-val">{{ stats.pending }}</div>
-                <div class="text-muted small">Pending ⏳</div>
-                <div class="text-muted tiny" id="stat-pending-pct">{{ (stats.pending / stats.total * 100)|round(1) if stats.total > 0 else 0 }}%</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card glass text-center">
-            <div class="card-body">
-                <div class="fs-5 fw-bold text-primary" id="stat-opened-val">{{ stats.opened }}</div>
-                <div class="text-muted small">Opened 📧</div>
-                <div class="text-muted tiny" id="stat-open-rate">{{ stats.open_rate|round(1) }}%</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card glass">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="fas fa-list me-2"></i>Recipient List</span>
-        
-        <div class="input-group input-group-sm" style="width: 250px;">
-            <span class="input-group-text bg-transparent border-end-0">
+        <form method="GET" action="" class="input-group" style="width: 100%; max-width: 300px;">
+            <button class="btn bg-transparent border-0 position-absolute" type="submit" style="z-index: 10; left: 5px; top: 2px;">
                 <i class="fas fa-search text-muted"></i>
-            </span>
-            <input type="text" id="tableSearchInput" class="form-control border-start-0" placeholder="Search emails, status...">
-        </div>
+            </button>
+            <input type="text" 
+                   name="q" 
+                   class="form-control" 
+                   value="{{ request.args.get('q', '') }}"
+                   placeholder="Search and hit enter..."
+                   style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 50px; padding-left: 2.5rem;">
+        </form>
     </div>
 
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0" id="recipientTable">
-                <thead>
-                    <tr>
-                        <th class="ps-4">Recipient</th>
-                        <th>Subject</th>
-                        <th>Status</th>
-                        <th>Scheduled</th>
-                        <th class="text-end pe-4">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for email in campaign.emails %}
-                    <tr class="searchable-row">
-                        <td class="ps-4">{{ email.recipient }}</td>
-                        <td>{{ email.subject }}</td>
-                        <td>
-                            <span class="badge rounded-pill 
-                                bg-{% if email.status == 'sent' %}success
-                                    {% elif email.status == 'failed' %}danger
-                                    {% else %}warning{% endif %}">
-                                {{ email.status|upper }}
-                            </span>
-                        </td>
-                        <td class="text-muted small">
-                            {{ email.scheduled_time.strftime('%Y-%m-%d %H:%M:%S') }}
-                        </td>
-                        <td class="text-end pe-4">
-
-                            {% if email.status == 'pending' %}
-                                <button class="btn btn-sm btn-outline-danger"
-                                        onclick="deleteEmail({{ email.id }})">
-                                    <i class="fas fa-trash"></i>
+    <div class="table-container">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Identity</th>
+                    <th class="d-none d-md-table-cell">Subject</th>
+                    <th>Status</th>
+                    <th class="d-none d-sm-table-cell">Timestamp</th>
+                    <th class="text-end pe-4">Controls</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for email in pagination.items %}
+                <tr>
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold text-accent" 
+                                 style="width: 35px; height: 35px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); font-size: 0.75rem;">
+                                {{ email.recipient[:2].upper() }}
+                            </div>
+                            <div>
+                                <div class="fw-bold text-white">{{ email.recipient }}</div>
+                                <div class="d-md-none text-muted small" style="font-size: 0.7rem;">{{ email.subject[:20] }}...</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="d-none d-md-table-cell text-muted small">{{ email.subject }}</td>
+                    <td>
+                        <span class="badge-status 
+                            {% if email.status == 'sent' %}badge-sent
+                            {% elif email.status == 'failed' %}badge-failed
+                            {% elif email.status == 'opened' %}badge-opened
+                            {% else %}badge-pending{% endif %}">
+                            {{ email.status }}
+                        </span>
+                    </td>
+                    <td class="d-none d-sm-table-cell text-muted small font-monospace">
+                        {{ email.scheduled_time.strftime('%H:%M · %d %b') }}
+                    </td>
+                    <td class="text-end pe-4">
+                        {% if email.status == 'pending' %}
+                            <button onclick="deleteEmail({{ email.id }})" class="btn-glass-icon ms-auto" title="Delete">
+                                <i class="fas fa-trash-alt fa-xs"></i>
+                            </button>
+                        {% elif email.status == 'failed' %}
+                            <form action="/tasks/{{ email.id }}/retry" method="POST" class="d-inline">
+                                <button class="btn-glass-icon ms-auto" title="Retry">
+                                    <i class="fas fa-redo-alt fa-xs"></i>
                                 </button>
-                            {% endif %}
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">No results found on this page.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
-                            {% if email.status == 'failed' %}
-                                <form action="/tasks/{{ email.id }}/retry" method="POST" style="display:inline;">
-                                    <button type="submit" class="btn btn-sm btn-outline-light">
-                                        <i class="fas fa-redo"></i>
-                                    </button>
-                                </form>
-                            {% endif %}
-
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    
-                    <tr id="noResultsRow" style="display: none;">
-                        <td colspan="5" class="text-center py-4 text-muted">
-                            <i class="fas fa-search me-2"></i>No matching records found.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+    <div class="d-flex justify-content-between align-items-center p-4 border-top" style="border-color: rgba(255,255,255,0.05);">
+        <div class="text-muted small">
+            Displaying {{ pagination.items|length }} items
         </div>
+        <nav aria-label="Campaign pagination">
+            <ul class="pagination pagination-custom mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.prev_num, q=request.args.get('q'), id=campaign.id) }}" tabindex="-1">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+
+                {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% if page_num %}
+                        <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for(request.endpoint, page=page_num, q=request.args.get('q'), id=campaign.id) }}">
+                                {{ page_num }}
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.next_num, q=request.args.get('q'), id=campaign.id) }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
     </div>
 </div>
 
+<div class="d-none">
+    <span id="stat-sent-val">{{ stats.sent }}</span>
+    <span id="stat-failed-val">{{ stats.failed }}</span>
+    <span id="stat-pending-val">{{ stats.pending }}</span>
+    <span id="stat-opened-val">{{ stats.opened }}</span>
+</div>
 
-<div id="addMoreModal" class="modal" tabindex="-1" style="display:none;">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content glass">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-user-plus me-2"></i>Add More Emails
-                </h5>
-                <button class="btn-close" onclick="closeAddMoreModal()"></button>
+<div id="addMoreModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="glass-panel" style="pointer-events: auto; background: #174143; box-shadow: 0 0 50px rgba(0,0,0,0.8);">
+            <div class="modal-header border-bottom border-secondary p-4">
+                <h5 class="modal-title text-accent fw-bold"><i class="fas fa-cloud-upload-alt me-2"></i> IMPORT RECIPIENTS</h5>
+                <button type="button" class="btn-close btn-close-white" onclick="closeAddMoreModal()"></button>
             </div>
-
             <form id="addMoreForm" method="POST" action="/campaign/{{ campaign.id }}/add-emails" enctype="multipart/form-data">
-                <div class="modal-body">
-
+                <div class="modal-body p-4">
                     <input type="hidden" name="campaign_id" value="{{ campaign.id }}">
-
-                    <div class="mb-3">
-                        <label class="form-label">Upload Excel/CSV</label>
-                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls, .csv">
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold">FILE UPLOAD (CSV/EXCEL)</label>
+                        <input type="file" class="form-control" name="file" accept=".xlsx, .xls, .csv" 
+                               style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white;">
                     </div>
-
-                    <div class="text-center text-muted my-2">OR</div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Enter Emails Manually</label>
-                        <textarea class="form-control" name="recipients" rows="3"
-                            placeholder="email1@example.com, email2@example.com"></textarea>
+                    <div class="d-flex align-items-center my-4">
+                        <div class="flex-grow-1 border-bottom border-secondary opacity-25"></div>
+                        <span class="px-3 text-accent fw-bold small">OR</span>
+                        <div class="flex-grow-1 border-bottom border-secondary opacity-25"></div>
                     </div>
-
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">MANUAL PASTE</label>
+                        <textarea class="form-control" name="recipients" rows="4" placeholder="email1@example.com, email2@example.com"
+                            style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white;"></textarea>
+                    </div>
                 </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" onclick="closeAddMoreModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-check me-1"></i>Add Emails
-                    </button>
+                <div class="modal-footer border-top border-secondary p-4">
+                    <button type="button" class="btn btn-outline-light btn-sm px-4" onclick="closeAddMoreModal()">Cancel</button>
+                    <button type="submit" class="btn btn-peach btn-sm px-4">Import Data</button>
                 </div>
             </form>
         </div>
@@ -265,144 +371,103 @@
 
 {% endblock %}
 
-
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-const campaignId = {{ campaign.id }};
-let distributionChart, statusChart;
+    const campaignId = {{ campaign.id }};
+    let distributionChart, statusChart;
+    let addMoreModalInstance = null;
 
-/* ----------- Modal Control ----------- */
-function openAddMoreModal() {
-    document.getElementById("addMoreModal").style.display = "block";
-}
-function closeAddMoreModal() {
-    document.getElementById("addMoreModal").style.display = "none";
-}
-
-/* ----------- Delete Single Email ----------- */
-function deleteEmail(id) {
-    if (!confirm("Remove this email from the campaign?")) return;
-
-    fetch(`/email/${id}/delete`, { method: 'POST' })
-        .then(res => {
-            if (res.ok) location.reload();
-            else alert("Failed to delete email.");
-        });
-}
-
-/* ----------- Real-Time Stats Update ----------- */
-function updateCampaignStats() {
-    fetch(`/api/campaign/${campaignId}/stats?v=` + Date.now(), {
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
-    })
-    .then(res => res.json())
-    .then(data => {
-        // Update card values
-        document.getElementById('stat-sent-val').textContent = data.sent;
-        document.getElementById('stat-sent-pct').textContent = data.sent_pct + '%';
-        document.getElementById('stat-failed-val').textContent = data.failed;
-        document.getElementById('stat-failed-pct').textContent = data.failed_pct + '%';
-        document.getElementById('stat-pending-val').textContent = data.pending;
-        document.getElementById('stat-pending-pct').textContent = data.pending_pct + '%';
-        document.getElementById('stat-opened-val').textContent = data.opened;
-        document.getElementById('stat-open-rate').textContent = data.open_rate + '%';
-        
-        // Update progress bar
-        document.getElementById('progress-bar').style.width = data.sent_pct + '%';
-        document.getElementById('progress-pct').textContent = data.sent_pct + '%';
-        document.getElementById('progress-text').textContent = data.sent + ' sent';
-        
-        // Update charts
-        if (distributionChart) {
-            distributionChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
-            distributionChart.update('none');
-        }
-        if (statusChart) {
-            statusChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
-            statusChart.update('none');
-        }
-    })
-    .catch(err => console.error('Stats update failed:', err));
-}
-
-/* ----------- Initialize Charts ----------- */
-function initCharts() {
-    const ctxDist = document.getElementById('distributionChart').getContext('2d');
-    distributionChart = new Chart(ctxDist, {
-        type: 'doughnut',
-        data: {
-            labels: ['Sent ✅', 'Failed ❌', 'Pending ⏳'],
-            datasets: [{
-                data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
-                backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
-                borderColor: ['#20c997', '#e74c3c', '#ff9800'],
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { labels: { color: '#aaa', font: { size: 12 } } }
-            }
+    document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        const modalEl = document.getElementById('addMoreModal');
+        if (modalEl) {
+            document.body.appendChild(modalEl);
+            addMoreModalInstance = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
         }
     });
 
-    const ctxStatus = document.getElementById('statusChart').getContext('2d');
-    statusChart = new Chart(ctxStatus, {
-        type: 'bar',
-        data: {
-            labels: ['Sent', 'Failed', 'Pending'],
-            datasets: [{
-                label: 'Count',
-                data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
-                backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
-                borderColor: ['#20c997', '#e74c3c', '#ff9800'],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
+    function openAddMoreModal() { if (addMoreModalInstance) addMoreModalInstance.show(); }
+    function closeAddMoreModal() { if (addMoreModalInstance) addMoreModalInstance.hide(); }
+
+    Chart.defaults.color = 'rgba(245, 229, 225, 0.5)';
+    Chart.defaults.font.family = "'Outfit', sans-serif";
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+
+    function initCharts() {
+        const ctxDist = document.getElementById('distributionChart').getContext('2d');
+        distributionChart = new Chart(ctxDist, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sent', 'Failed', 'Pending'],
+                datasets: [{
+                    data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
+                    backgroundColor: ['#2ecc71', '#ff6b6b', '#feca57'],
+                    borderColor: '#174143', borderWidth: 3
+                }]
             },
-            scales: {
-                x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#aaa' } },
-                y: { grid: { display: false }, ticks: { color: '#aaa' } }
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '70%',
+                plugins: { legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, color: '#F5E5E1' } } }
             }
-        }
-    });
-}
+        });
 
-/* ----------- Dynamic Client-Side Search ----------- */
-document.getElementById('tableSearchInput').addEventListener('keyup', function() {
-    const searchValue = this.value.toLowerCase();
-    const rows = document.querySelectorAll('.searchable-row');
-    let hasVisibleRow = false;
-
-    rows.forEach(row => {
-        const rowText = row.textContent.toLowerCase();
-        if (rowText.includes(searchValue)) {
-            row.style.display = "";
-            hasVisibleRow = true;
-        } else {
-            row.style.display = "none";
-        }
-    });
-
-    const noResultsRow = document.getElementById('noResultsRow');
-    if (!hasVisibleRow) {
-        noResultsRow.style.display = "";
-    } else {
-        noResultsRow.style.display = "none";
+        const ctxStatus = document.getElementById('statusChart').getContext('2d');
+        statusChart = new Chart(ctxStatus, {
+            type: 'bar',
+            data: {
+                labels: ['Sent', 'Failed', 'Pending'],
+                datasets: [{
+                    data: [{{ stats.sent }}, {{ stats.failed }}, {{ stats.pending }}],
+                    backgroundColor: ['#2ecc71', '#ff6b6b', '#feca57'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { display: false } },
+                    y: { grid: { display: false }, ticks: { color: '#F5E5E1', font: {size: 10} } }
+                }
+            }
+        });
     }
-});
 
-// Initialize on load
-document.addEventListener('DOMContentLoaded', initCharts);
-setInterval(updateCampaignStats, 2000); // Update every 2 seconds
+    function updateCampaignStats() {
+        // Simple polling for header stats only, no table update (as table is now paginated server-side)
+        fetch(`/api/campaign/${campaignId}/stats?v=` + Date.now())
+        .then(res => res.json())
+        .then(data => {
+            const sent = document.querySelectorAll('.stat-value')[1]; 
+            if(sent) sent.textContent = data.sent;
+            if (distributionChart) {
+                distributionChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
+                distributionChart.update('none');
+            }
+            if (statusChart) {
+                statusChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
+                statusChart.update('none');
+            }
+            const progBar = document.getElementById('progress-bar');
+            if(progBar) {
+                progBar.style.width = data.sent_pct + '%';
+                document.getElementById('progress-pct').textContent = data.sent_pct + '%';
+            }
+        })
+        .catch(err => console.log("Stats polling paused:", err));
+    }
+
+    function deleteEmail(id) {
+        if(confirm("Are you sure you want to remove this recipient?")) {
+            fetch(`/email/${id}/delete`, { method: 'POST' }).then(res => {
+                if(res.ok) location.reload();
+            });
+        }
+    }
+
+    setInterval(updateCampaignStats, 2000);
 </script>
 {% endblock %}

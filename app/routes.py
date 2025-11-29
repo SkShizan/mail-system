@@ -63,7 +63,7 @@ def logout():
 def get_stats_api():
     """API endpoint that returns live stats for AJAX refresh"""
     my_campaign_ids = [c.id for c in current_user.campaigns]
-    
+
     if not my_campaign_ids:
         stats = {'sent': 0, 'pending': 0, 'failed': 0, 'processing': False}
     else:
@@ -74,8 +74,67 @@ def get_stats_api():
         }
         # Processing status: show as processing if there are pending emails scheduled
         stats['processing'] = stats['pending'] > 0 or stats['sent'] > 0
-    
+
     return jsonify(stats)
+
+@bp.route('/api/activity-log')
+@login_required
+def get_activity_log():
+    """Get recent activity data for dashboard infographics"""
+    from datetime import timedelta
+    my_campaign_ids = [c.id for c in current_user.campaigns]
+    now = datetime.utcnow()
+    
+    # Recent campaigns (last 7 days)
+    recent_campaigns = Campaign.query.filter(
+        Campaign.user_id == current_user.id,
+        Campaign.created_at >= now - timedelta(days=7)
+    ).order_by(Campaign.created_at.desc()).limit(5).all()
+    
+    campaigns_data = []
+    for campaign in recent_campaigns:
+        sent = sum(1 for e in campaign.emails if e.status == 'sent')
+        opened = sum(1 for e in campaign.emails if e.opened_at)
+        campaigns_data.append({
+            'name': campaign.name,
+            'sent': sent,
+            'opened': opened,
+            'open_rate': round((opened / sent * 100), 1) if sent > 0 else 0,
+            'created_at': campaign.created_at.strftime('%b %d')
+        })
+    
+    # Activity breakdown (today)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_sent = Email.query.filter(
+        Email.campaign_id.in_(my_campaign_ids),
+        Email.status == 'sent',
+        Email.updated_at >= today_start
+    ).count()
+    today_failed = Email.query.filter(
+        Email.campaign_id.in_(my_campaign_ids),
+        Email.status == 'failed',
+        Email.updated_at >= today_start
+    ).count()
+    
+    # Top performing campaign
+    top_campaign = None
+    if my_campaign_ids:
+        top_campaign = Campaign.query.filter_by(user_id=current_user.id).order_by(
+            db.func.count(Email.id).desc()
+        ).first()
+    
+    return jsonify({
+        'recent_campaigns': campaigns_data,
+        'today_activity': {
+            'sent': today_sent,
+            'failed': today_failed,
+            'total': today_sent + today_failed
+        },
+        'top_campaign': {
+            'name': top_campaign.name if top_campaign else 'N/A',
+            'total_emails': len(top_campaign.emails) if top_campaign else 0
+        }
+    })
 
 # --- APPLICATION ROUTES (Protected) ---
 
@@ -219,9 +278,10 @@ def campaigns():
 
     campaign_stats = []
     for c in campaigns:
-        total = len(c.emails)
-        sent = sum(1 for e in c.emails if e.status == 'sent')
-        failed = sum(1 for e in c.emails if e.status == 'failed')
+        # Optimization: Use SQL count instead of Python len() for better performance
+        total = Email.query.filter_by(campaign_id=c.id).count()
+        sent = Email.query.filter_by(campaign_id=c.id, status='sent').count()
+        failed = Email.query.filter_by(campaign_id=c.id, status='failed').count()
         pending = total - sent - failed
 
         campaign_stats.append({
@@ -239,47 +299,82 @@ def campaigns():
 @bp.route('/campaign/<int:id>')
 @login_required
 def campaign_details(id):
-    # Ensure user owns this campaign
+    """
+    OPTIMIZED ROUTE: Handles server-side pagination and search.
+    This prevents the page from crashing with large email lists.
+    """
+    # 1. Get the Campaign & Verify Ownership
     campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-    
-    # Calculate campaign stats
-    total = len(campaign.emails)
-    sent = sum(1 for e in campaign.emails if e.status == 'sent')
-    failed = sum(1 for e in campaign.emails if e.status == 'failed')
-    opened = sum(1 for e in campaign.emails if e.opened_at is not None)
-    pending = total - sent - failed
-    
+
+    # 2. Get Page Number & Search Query from URL
+    page = request.args.get('page', 1, type=int)
+    search_query = request.args.get('q', '', type=str)
+
+    # 3. Build the Base Query
+    query = Email.query.filter_by(campaign_id=id)
+
+    # 4. Apply Search Filter (if user typed something)
+    if search_query:
+        search_pattern = f"%{search_query}%"
+        query = query.filter(Email.recipient.ilike(search_pattern))
+
+    # 5. Paginate (Show 100 per page)
+    # error_out=False ensures empty page doesn't crash
+    pagination = query.order_by(Email.id.desc()).paginate(
+        page=page, per_page=100, error_out=False
+    )
+
+    # 6. Calculate Stats (Using SQL counts for speed)
+    base_stats_query = Email.query.filter_by(campaign_id=id)
+
+    total = base_stats_query.count()
+    sent = base_stats_query.filter_by(status='sent').count()
+    failed = base_stats_query.filter_by(status='failed').count()
+    opened = base_stats_query.filter(Email.opened_at != None).count()
+    pending = total - (sent + failed)
+
+    sent_pct = (sent / total * 100) if total > 0 else 0
+    open_rate = (opened / sent * 100) if sent > 0 else 0
+
     stats = {
         'total': total,
         'sent': sent,
         'failed': failed,
         'opened': opened,
         'pending': pending,
-        'sent_pct': (sent / total * 100) if total > 0 else 0,
-        'open_rate': (opened / sent * 100) if sent > 0 else 0
+        'sent_pct': round(sent_pct, 1),
+        'open_rate': round(open_rate, 1)
     }
-    
-    return render_template('campaign_details.html', campaign=campaign, stats=stats)
+
+    # 7. Render Template with pagination object
+    return render_template(
+        'campaign_details.html', 
+        campaign=campaign, 
+        stats=stats, 
+        pagination=pagination
+    )
 
 @bp.route('/api/campaign/<int:id>/stats')
 @login_required
 def campaign_stats_api(id):
     """Detailed campaign stats API for real-time charts"""
     campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-    
-    total = len(campaign.emails)
-    sent = sum(1 for e in campaign.emails if e.status == 'sent')
-    failed = sum(1 for e in campaign.emails if e.status == 'failed')
-    opened = sum(1 for e in campaign.emails if e.opened_at is not None)
+
+    # Use SQL Counts for performance
+    base_query = Email.query.filter_by(campaign_id=id)
+    total = base_query.count()
+    sent = base_query.filter_by(status='sent').count()
+    failed = base_query.filter_by(status='failed').count()
+    opened = base_query.filter(Email.opened_at != None).count()
     pending = total - sent - failed
     processing = pending > 0 or sent > 0
-    
+
     # Batch info
     batches = db.session.query(Email.batch_id, db.func.count(Email.id)).filter(
         Email.campaign_id == id,
         Email.batch_id != None
     ).group_by(Email.batch_id).count()
-    
+
     return jsonify({
         'total': total,
         'sent': sent,
@@ -303,7 +398,7 @@ def track_email_open(tracking_id):
         db.session.commit()
         import sys
         print(f"✅ TRACKED: Email {email.id} opened via {tracking_id}", file=sys.stderr)
-    
+
     # Return 1x1 transparent GIF pixel
     pixel = BytesIO()
     pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
@@ -341,16 +436,6 @@ def schedule_email_api():
         return jsonify({'error': 'Missing required fields'}), 400
 
     scheduled_time = datetime.utcnow() + timedelta(seconds=delay)
-
-    # Create a default/hidden campaign for direct API calls if needed, 
-    # or just create email without campaign (but careful with ownership).
-    # Ideally, API should specify campaign. For now, we link to a "Direct" campaign or None.
-    # Note: If campaign_id is None, it won't show in any user dashboard. 
-    # Let's create a temporary campaign holder for API calls or require it.
-
-    # For simplicity in this snippets, we will just create it.
-    # WARNING: Without campaign_id, it might be orphaned in UI. 
-    # Let's create a "API Campaign" for the user if it doesn't exist.
 
     api_campaign = Campaign.query.filter_by(user_id=current_user.id, name="API Emails").first()
     if not api_campaign:
@@ -457,11 +542,15 @@ def add_emails_to_campaign(id):
     emails_added = 0
 
     # Use first existing email to get template body/subject if available, else default
+    # Note: If no emails exist, we default to campaign name or empty string
     base_subject = campaign.name
     base_body = ""
-    if campaign.emails:
-        base_subject = campaign.emails[0].subject
-        base_body = campaign.emails[0].body
+
+    # Optimize: Don't load all emails just to get the first one. Use .first()
+    first_email = Email.query.filter_by(campaign_id=id).first()
+    if first_email:
+        base_subject = first_email.subject
+        base_body = first_email.body
 
     # Method 1: File Upload
     if file and file.filename:
@@ -510,4 +599,3 @@ def add_emails_to_campaign(id):
     db.session.commit()
     flash(f"Added {emails_added} new emails to campaign.", "success")
     return redirect(url_for('main.campaign_details', id=id))
-

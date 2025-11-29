@@ -1,67 +1,136 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    /* Local overrides for Settings */
+    .custom-switch .form-check-input {
+        background-color: rgba(0,0,0,0.3);
+        border-color: var(--glass-border);
+        width: 3rem; 
+        height: 1.5rem;
+    }
+    .custom-switch .form-check-input:checked {
+        background-color: var(--accent-color);
+        border-color: var(--accent-color);
+    }
+    
+    /* Enhance Quill for this specific dark context */
+    #signature-editor .ql-editor {
+        font-size: 0.95rem;
+        color: var(--text-primary);
+    }
+</style>
+
+<!-- Header Section -->
+<div class="d-flex flex-wrap justify-content-between align-items-end mb-5">
+    <div class="mb-3 mb-md-0">
+        <a href="/" class="text-decoration-none text-muted small mb-2 d-inline-block hover-accent">
+            <i class="fas fa-arrow-left me-2"></i>DASHBOARD
+        </a>
+        <h1 class="display-5 fw-bold text-white mb-1" style="text-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+            Configuration
+        </h1>
+        <p class="mb-0 text-muted small">
+            Manage your SMTP credentials and email identity.
+        </p>
+    </div>
+</div>
+
 <div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card glass"></div>
-            <div class="card-header">
-                <i class="fas fa-cogs me-2"></i>SMTP Settings
+    <div class="col-lg-8 col-xl">
+        <div class="glass-panel p-4 p-md-5">
+            
+            <div class="d-flex align-items-center mb-4 pb-3 border-bottom" style="border-color: rgba(255,255,255,0.05) !important;">
+                <div class="rounded-circle bg-dark p-3 me-3 text-accent d-flex align-items-center justify-content-center border border-secondary" style="width:50px; height:50px;">
+                    <i class="fas fa-server fa-lg"></i>
+                </div>
+                <div>
+                    <h5 class="mb-0 fw-bold text-white">SMTP Server</h5>
+                    <div class="text-muted small">Outbound mail server details</div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="POST" id="settingsForm">
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="smtp_server" class="form-label">SMTP Server</label>
+
+            <form method="POST" id="settingsForm">
+                <!-- Server & Port -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <label for="smtp_server" class="form-label">Host Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-secondary text-muted"><i class="fas fa-globe"></i></span>
                             <input type="text" class="form-control" id="smtp_server" name="smtp_server"
-                                value="{{ settings.smtp_server if settings else '' }}" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="smtp_port" class="form-label">Port</label>
-                            <input type="number" class="form-control" id="smtp_port" name="smtp_port" 
-                                value="{{ settings.smtp_port if settings else '' }}" required>
+                                   placeholder="smtp.gmail.com"
+                                   value="{{ settings.smtp_server if settings else '' }}" required>
                         </div>
                     </div>
+                    <div class="col-md-4">
+                        <label for="smtp_port" class="form-label">Port</label>
+                        <input type="number" class="form-control" id="smtp_port" name="smtp_port" 
+                               placeholder="587"
+                               value="{{ settings.smtp_port if settings else '' }}" required>
+                    </div>
+                </div>
 
-                    <div class="mb-3">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="use_tls" name="use_tls" {% if
-                                settings and settings.use_tls %}checked{% endif %}>
-                            <label class="form-check-label" for="use_tls">Use TLS Encryption</label>
+                <!-- Encryption Toggle -->
+                <div class="mb-4 p-3 rounded" style="background: rgba(0,0,0,0.2);">
+                    <div class="form-check form-switch custom-switch d-flex align-items-center">
+                        <input class="form-check-input mt-0" type="checkbox" id="use_tls" name="use_tls" 
+                               style="cursor: pointer;"
+                               {% if settings and settings.use_tls %}checked{% endif %}>
+                        <label class="form-check-label text-white ms-3 fw-bold" for="use_tls">
+                            Enable TLS Encryption
+                            <div class="text-muted small fw-normal">Recommended for most providers (Gmail, Outlook)</div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Credentials -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label for="smtp_username" class="form-label">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-secondary text-muted"><i class="fas fa-user"></i></span>
+                            <input type="text" class="form-control" id="smtp_username" name="smtp_username" 
+                                   placeholder="user@example.com"
+                                   value="{{ settings.smtp_username if settings else '' }}" required>
                         </div>
                     </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="smtp_username" class="form-label">Username</label>
-                            <input type="text" class="form-control" id="smtp_username" name="smtp_username"
-                                value="{{ settings.smtp_username if settings else '' }}" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="smtp_password" class="form-label">Password</label>
-                            <input type="password" class="form-control" id="smtp_password" name="smtp_password"
-                                value="{{ settings.smtp_password if settings else '' }}" required>
+                    <div class="col-md-6">
+                        <label for="smtp_password" class="form-label">Password / App Key</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-secondary text-muted"><i class="fas fa-key"></i></span>
+                            <input type="password" class="form-control" id="smtp_password" name="smtp_password" 
+                                   placeholder="••••••••••••"
+                                   value="{{ settings.smtp_password if settings else '' }}" required>
                         </div>
                     </div>
+                </div>
 
-                    <div class="mb-4">
-                        <label for="from_email" class="form-label">Default Sender Email</label>
-                        <input type="email" class="form-control" id="from_email" name="from_email"
-                            value="{{ settings.from_email if settings else '' }}" required>
-                    </div>
+                <!-- Default Sender -->
+                <div class="mb-5">
+                    <label for="from_email" class="form-label">Default "From" Address</label>
+                    <input type="email" class="form-control" id="from_email" name="from_email" 
+                           placeholder="marketing@yourdomain.com"
+                           value="{{ settings.from_email if settings else '' }}" required>
+                </div>
 
-                    <div class="mb-4">
-                        <label for="signature-editor" class="form-label">Email Signature</label>
-                        <div id="signature-editor" style="height: 150px;"></div>
-                        <input type="hidden" name="signature" id="signature">
+                <!-- Signature Section -->
+                <div class="mb-4">
+                    <div class="d-flex align-items-center mb-3 pb-2 border-bottom" style="border-color: rgba(255,255,255,0.05) !important;">
+                        <i class="fas fa-pen-nib me-2 text-accent"></i>
+                        <h6 class="mb-0 fw-bold text-white text-uppercase small" style="letter-spacing: 1px;">Email Signature</h6>
                     </div>
+                    
+                    <div id="signature-editor" style="height: 150px; border-radius: 0 0 8px 8px;"></div>
+                    <input type="hidden" name="signature" id="signature">
+                </div>
 
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>Save Settings
-                        </button>
-                    </div>
-                </form>
-            </div>
+                <!-- Submit Button -->
+                <div class="d-grid mt-5">
+                    <button type="submit" class="btn btn-peach btn-lg shadow-lg">
+                        <i class="fas fa-check-circle me-2"></i>SAVE CONFIGURATION
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -69,9 +138,10 @@
 
 {% block scripts %}
 <script>
+    // Initialize Quill for Signature
     var quill = new Quill('#signature-editor', {
         theme: 'snow',
-        placeholder: 'Create your signature...',
+        placeholder: 'Create a professional signature...',
         modules: {
             toolbar: [
                 ['bold', 'italic', 'underline'],
@@ -81,9 +151,13 @@
         }
     });
 
-    // Set initial content
-    quill.root.innerHTML = `{{ settings.signature | safe if settings and settings.signature else '' }}`;
+    // Set initial content safely
+    const initialContent = `{{ settings.signature | safe if settings and settings.signature else '' }}`;
+    if (initialContent) {
+        quill.root.innerHTML = initialContent;
+    }
 
+    // Form Submission Handler
     var form = document.getElementById('settingsForm');
     form.onsubmit = function () {
         var signature = document.querySelector('input[name=signature]');
