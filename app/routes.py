@@ -82,7 +82,6 @@ def get_stats_api():
 def get_activity_log():
     """Get recent activity data for dashboard infographics"""
     from datetime import timedelta
-    my_campaign_ids = [c.id for c in current_user.campaigns]
     now = datetime.utcnow()
     
     # Recent campaigns (last 7 days)
@@ -103,25 +102,29 @@ def get_activity_log():
             'created_at': campaign.created_at.strftime('%b %d')
         })
     
-    # Activity breakdown (today)
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_sent = Email.query.filter(
-        Email.campaign_id.in_(my_campaign_ids),
-        Email.status == 'sent',
-        Email.updated_at >= today_start
-    ).count()
-    today_failed = Email.query.filter(
-        Email.campaign_id.in_(my_campaign_ids),
-        Email.status == 'failed',
-        Email.updated_at >= today_start
-    ).count()
+    # Activity breakdown (today) - count all sent/failed emails from all user's campaigns
+    my_campaign_ids = [c.id for c in current_user.campaigns]
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Top performing campaign
-    top_campaign = None
     if my_campaign_ids:
-        top_campaign = Campaign.query.filter_by(user_id=current_user.id).order_by(
-            db.func.count(Email.id).desc()
-        ).first()
+        today_sent = Email.query.filter(
+            Email.campaign_id.in_(my_campaign_ids),
+            Email.status == 'sent',
+            Email.created_at >= today_start
+        ).count()
+        today_failed = Email.query.filter(
+            Email.campaign_id.in_(my_campaign_ids),
+            Email.status == 'failed',
+            Email.created_at >= today_start
+        ).count()
+    else:
+        today_sent = 0
+        today_failed = 0
+    
+    # Top performing campaign (most emails)
+    top_campaign = None
+    if recent_campaigns:
+        top_campaign = max(recent_campaigns, key=lambda c: len(c.emails))
     
     return jsonify({
         'recent_campaigns': campaigns_data,
