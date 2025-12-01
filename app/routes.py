@@ -2,9 +2,11 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import current_user, login_user, logout_user, login_required
 from app import db, login
 from app.models import Email, SMTPSettings, Campaign, User
+# Note: ClickEvent is optional depending on if you created that model
 from datetime import datetime, timedelta
 import pytz
 from io import BytesIO
+from urllib.parse import unquote
 
 user_tz = pytz.timezone("Asia/Kolkata")
 utc = pytz.UTC
@@ -81,15 +83,14 @@ def get_stats_api():
 @login_required
 def get_activity_log():
     """Get recent activity data for dashboard infographics"""
-    from datetime import timedelta
     now = datetime.utcnow()
-    
+
     # Recent campaigns (last 7 days)
     recent_campaigns = Campaign.query.filter(
         Campaign.user_id == current_user.id,
         Campaign.created_at >= now - timedelta(days=7)
     ).order_by(Campaign.created_at.desc()).limit(5).all()
-    
+
     campaigns_data = []
     for campaign in recent_campaigns:
         sent = sum(1 for e in campaign.emails if e.status == 'sent')
@@ -101,11 +102,11 @@ def get_activity_log():
             'open_rate': round((opened / sent * 100), 1) if sent > 0 else 0,
             'created_at': campaign.created_at.strftime('%b %d')
         })
-    
+
     # Activity breakdown (today) - count all sent/failed emails from all user's campaigns
     my_campaign_ids = [c.id for c in current_user.campaigns]
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     if my_campaign_ids:
         today_sent = Email.query.filter(
             Email.campaign_id.in_(my_campaign_ids),
@@ -120,12 +121,12 @@ def get_activity_log():
     else:
         today_sent = 0
         today_failed = 0
-    
+
     # Top performing campaign (most emails)
     top_campaign = None
     if recent_campaigns:
         top_campaign = max(recent_campaigns, key=lambda c: len(c.emails))
-    
+
     return jsonify({
         'recent_campaigns': campaigns_data,
         'today_activity': {
@@ -334,6 +335,7 @@ def campaign_details(id):
     sent = base_stats_query.filter_by(status='sent').count()
     failed = base_stats_query.filter_by(status='failed').count()
     opened = base_stats_query.filter(Email.opened_at != None).count()
+    clicked = base_stats_query.filter(Email.clicked_at != None).count()
     pending = total - (sent + failed)
 
     sent_pct = (sent / total * 100) if total > 0 else 0
@@ -344,6 +346,7 @@ def campaign_details(id):
         'sent': sent,
         'failed': failed,
         'opened': opened,
+        'clicked': clicked,
         'pending': pending,
         'sent_pct': round(sent_pct, 1),
         'open_rate': round(open_rate, 1)
@@ -407,6 +410,38 @@ def track_email_open(tracking_id):
     pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
     pixel.seek(0)
     return send_file(pixel, mimetype='image/gif', cache_control='no-cache, no-store, must-revalidate')
+
+# --- NEW CLICK TRACKING ROUTE ---
+@bp.route('/click/<tracking_id>')
+def track_click(tracking_id):
+    target_url = request.args.get('url')
+    if not target_url:
+        return "Invalid URL", 400
+
+    # 1. Decode the target URL
+    target_url = unquote(target_url)
+
+    # 2. Find the email
+    email = Email.query.filter_by(tracking_id=tracking_id).first()
+
+    if email:
+        # 3. Mark as Clicked (First click only)
+        if not email.clicked_at:
+            email.clicked_at = datetime.utcnow()
+            # If also not marked as opened, mark it (clicking implies opening)
+            if not email.opened_at:
+                email.opened_at = datetime.utcnow()
+            db.session.commit()
+
+        # 4. (Optional) Log detailed event
+        # new_click = ClickEvent(email_id=email.id, url=target_url, ip_address=request.remote_addr)
+        # db.session.add(new_click)
+        # db.session.commit()
+
+        print(f"✅ CLICKED: Email {email.id} clicked link {target_url}")
+
+    # 5. Redirect to actual destination
+    return redirect(target_url)
 
 @bp.route('/tasks/<int:id>/retry', methods=['POST'])
 @login_required

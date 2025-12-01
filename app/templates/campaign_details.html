@@ -17,6 +17,7 @@
         --status-error: #ff6b6b;
         --status-wait: #feca57;
         --status-info: #3498db;
+        --status-clicked: #9b59b6; /* Purple for Clicked */
     }
 
     /* --- RESPONSIVE LAYOUT FIXES --- */
@@ -119,6 +120,8 @@
     .badge-failed { background: rgba(255, 107, 107, 0.15); color: var(--status-error); border: 1px solid rgba(255, 107, 107, 0.3); }
     .badge-pending { background: rgba(254, 202, 87, 0.15); color: var(--status-wait); border: 1px solid rgba(254, 202, 87, 0.3); }
     .badge-opened { background: rgba(52, 152, 219, 0.15); color: var(--status-info); border: 1px solid rgba(52, 152, 219, 0.3); }
+    /* NEW: Clicked Badge */
+    .badge-clicked { background: rgba(155, 89, 182, 0.15); color: var(--status-clicked); border: 1px solid rgba(155, 89, 182, 0.3); }
 
     .progress-container { background: rgba(0,0,0,0.3); border-radius: 50px; padding: 4px; }
     .progress-fill { background: linear-gradient(90deg, var(--accent-color), #ff7e5f); height: 10px; border-radius: 50px; transition: width 1s ease; }
@@ -143,37 +146,44 @@
 </div>
 
 <div class="row g-3 mb-5 animate-in delay-1">
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value">{{ stats.total }}</div>
             <div class="stat-label">Total</div>
         </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value" style="color: var(--status-success);">{{ stats.sent }}</div>
             <div class="stat-label">Sent</div>
         </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value" style="color: var(--status-info);">{{ stats.opened }}</div>
             <div class="stat-label">Opened</div>
         </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value" style="color: var(--status-clicked);">{{ stats.clicked }}</div>
+            <div class="stat-label">Clicked</div>
+        </div>
+    </div>
+    
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center position-relative">
             <div class="stat-value text-white">{{ stats.open_rate|round(1) }}<span class="fs-6 text-muted">%</span></div>
             <div class="stat-label">Open Rate</div>
         </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value" style="color: var(--status-wait);">{{ stats.pending }}</div>
             <div class="stat-label">Pending</div>
         </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-2">
+    <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value" style="color: var(--status-error);">{{ stats.failed }}</div>
             <div class="stat-label">Failed</div>
@@ -260,11 +270,15 @@
                     <td class="d-none d-md-table-cell text-muted small">{{ email.subject }}</td>
                     <td>
                         <span class="badge-status 
-                            {% if email.status == 'sent' %}badge-sent
+                            {% if email.clicked_at %}badge-clicked
+                            {% elif email.opened_at %}badge-opened
+                            {% elif email.status == 'sent' %}badge-sent
                             {% elif email.status == 'failed' %}badge-failed
-                            {% elif email.status == 'opened' %}badge-opened
                             {% else %}badge-pending{% endif %}">
-                            {{ email.status }}
+                            
+                            {% if email.clicked_at %}CLICKED
+                            {% elif email.opened_at %}OPENED
+                            {% else %}{{ email.status|upper }}{% endif %}
                         </span>
                     </td>
                     <td class="d-none d-sm-table-cell text-muted small font-monospace">

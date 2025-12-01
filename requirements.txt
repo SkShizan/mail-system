@@ -8,3 +8,5 @@ celery
 redis
 pytz
 flask-login
+beautifulsoup4
+itsdangerous

@@ -50,6 +50,15 @@ class Email(db.Model):
     rate_limit_retry_at = db.Column(db.DateTime, nullable=True)
     tracking_id = db.Column(db.String(50), unique=True, nullable=True)
     opened_at = db.Column(db.DateTime, nullable=True)
+    clicked_at = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<Email {self.id} to {self.recipient}>'
+
+class ClickEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email_id = db.Column(db.Integer, db.ForeignKey('email.id'), nullable=False)
+    url = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.now)
+    ip_address = db.Column(db.String(50))
+    user_agent = db.Column(db.String(200))

@@ -7,14 +7,12 @@
     <div class="card-body">
         <form method="POST" enctype="multipart/form-data" id="composeForm">
             
-            <!-- Campaign Name -->
             <div class="mb-4">
                 <label for="campaign_name" class="form-label">Campaign Name</label>
                 <input type="text" class="form-control" id="campaign_name" name="campaign_name"
                        placeholder="e.g., Monthly Newsletter" required>
             </div>
 
-            <!-- File Upload -->
             <div class="mb-4">
                 <label class="form-label">Recipients (Excel/CSV)</label>
                 <div class="input-group">
@@ -29,34 +27,29 @@
                 </div>
             </div>
 
-            <!-- Manual Recipients -->
             <div class="mb-4">
                 <label class="form-label">Or Enter Emails Manually</label>
                 <textarea class="form-control" id="recipients" name="recipients" rows="2"
                           placeholder="user@example.com, another@example.com"></textarea>
             </div>
 
-            <!-- Subject -->
             <div class="mb-4">
                 <label class="form-label">Subject</label>
                 <input type="text" class="form-control" id="subject" name="subject"
                        placeholder="Enter email subject" required>
             </div>
 
-            <!-- Message Mode Toggle -->
             <div class="mb-3">
                 <label class="form-label">Message Type</label><br>
                 <button type="button" id="btnRich" class="btn btn-sm btn-primary me-2">Rich Text Editor</button>
                 <button type="button" id="btnHtml" class="btn btn-sm btn-outline-secondary">Raw HTML</button>
             </div>
 
-            <!-- Rich Text Editor -->
             <div id="quillSection" class="mb-4">
                 <label class="form-label">Message (Rich Text)</label>
                 <div id="editor" style="height: 300px;"></div>
             </div>
 
-            <!-- HTML Code Editor -->
             <div id="htmlSection" class="mb-4" style="display: none;">
                 <label class="form-label">HTML Code</label>
                 <textarea id="htmlInput" class="form-control" rows="10"
@@ -66,10 +59,8 @@
                 <iframe id="htmlPreview" class="w-100 border rounded" style="height: 300px;"></iframe>
             </div>
 
-            <!-- Hidden Input Storage -->
             <input type="hidden" name="body" id="body">
 
-            <!-- Scheduling -->
             <div class="row mb-4 mt-4">
                 <div class="col-md-6">
                     <label class="form-label">Schedule Time (Optional)</label>
@@ -78,7 +69,6 @@
                 </div>
             </div>
 
-            <!-- Submit -->
             <div class="d-grid">
                 <button type="submit" class="btn btn-primary btn-lg">
                     <i class="fas fa-paper-plane me-2"></i>Create Campaign & Send
@@ -86,6 +76,26 @@
             </div>
 
         </form>
+    </div>
+</div>
+
+<div class="modal fade" id="linkTrackingModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content glass-panel" style="background: var(--bg-deep); border: var(--glass-border);">
+            <div class="modal-header border-bottom border-secondary">
+                <h5 class="modal-title text-white">Select Links to Track</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">We found the following links in your email. Select the ones you want to track clicks for:</p>
+                <div id="linkList" class="list-group">
+                    </div>
+            </div>
+            <div class="modal-footer border-top border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-peach" onclick="confirmSubmission()">Confirm & Send</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -149,14 +159,84 @@
 
     htmlInput.addEventListener("input", updatePreview);
 
-    // -------------- Form Submit -------------------------
-    document.getElementById("composeForm").onsubmit = () => {
-        const hiddenBody = document.getElementById("body");
-        if (useHtml) {
-            hiddenBody.value = htmlInput.value;      // Use HTML source
-        } else {
-            hiddenBody.value = quill.root.innerHTML; // Use rich text editor
+    // -------------- Form Submit & Tracking Logic -------------------------
+    const composeForm = document.getElementById("composeForm");
+    let isTrackingConfirmed = false;
+
+    composeForm.addEventListener('submit', function(e) {
+        if (isTrackingConfirmed) return true; // Allow submit if already confirmed
+
+        e.preventDefault(); // Stop initial submit
+
+        // Get content based on active mode
+        let content = useHtml ? htmlInput.value : quill.root.innerHTML;
+        
+        // Parse content to find links
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        const links = doc.getElementsByTagName('a');
+
+        // If no links found, just submit immediately
+        if (links.length === 0) {
+            finalSubmit(content);
+            return;
         }
-    };
+
+        // Show Modal with links
+        const linkList = document.getElementById('linkList');
+        linkList.innerHTML = '';
+        
+        Array.from(links).forEach((link, index) => {
+            if (!link.href) return;
+            
+            const item = document.createElement('label');
+            item.className = 'list-group-item bg-transparent text-white border-secondary d-flex align-items-center gap-3';
+            item.innerHTML = `
+                <input class="form-check-input flex-shrink-0" type="checkbox" value="${index}" checked style="width: 20px; height: 20px; border-color: var(--accent-color); background-color: rgba(0,0,0,0.3);">
+                <div class="text-truncate" style="max-width: 100%;">
+                    <div class="fw-bold text-accent small">LINK TEXT: "${link.textContent.trim() || 'Image/Button'}"</div>
+                    <div class="small text-muted text-truncate">${link.href}</div>
+                </div>
+            `;
+            linkList.appendChild(item);
+        });
+
+        const modalEl = document.getElementById('linkTrackingModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    });
+
+    function confirmSubmission() {
+        // 1. Get content again
+        let content = useHtml ? htmlInput.value : quill.root.innerHTML;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        const links = doc.getElementsByTagName('a');
+
+        // 2. Mark selected links with data-track="true"
+        const checkboxes = document.querySelectorAll('#linkList input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                // Find the corresponding link in the DOM and tag it
+                if (links[cb.value]) {
+                    links[cb.value].setAttribute('data-track', 'true');
+                }
+            }
+        });
+
+        // 3. Serialize back to string
+        const finalHtml = doc.body.innerHTML;
+
+        // 4. Update hidden input and submit
+        finalSubmit(finalHtml);
+    }
+
+    function finalSubmit(htmlContent) {
+        const hiddenBody = document.getElementById("body");
+        hiddenBody.value = htmlContent;
+        
+        isTrackingConfirmed = true;
+        composeForm.submit();
+    }
 </script>
 {% endblock %}
