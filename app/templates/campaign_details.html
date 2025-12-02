@@ -166,6 +166,14 @@
     </div>
     <div class="col-6 col-md-4 col-xl">
         <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
+            <div class="stat-value text-muted" id="stat-bots">0</div>
+            <div class="stat-label text-muted">
+                <i class="fas fa-robot me-1"></i>Bots Filtered
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+        <div class="glass-panel h-100 p-3 text-center d-flex flex-column justify-content-center">
             <div class="stat-value" style="color: var(--status-clicked);">{{ stats.clicked }}</div>
             <div class="stat-label">Clicked</div>
         </div>
@@ -451,12 +459,27 @@
     }
 
     function updateCampaignStats() {
-        // Simple polling for header stats only, no table update (as table is now paginated server-side)
+        // Poll the API for fresh stats (including the new 'bots' count)
         fetch(`/api/campaign/${campaignId}/stats?v=` + Date.now())
         .then(res => res.json())
         .then(data => {
+            // 1. Update Sent Count (Existing)
             const sent = document.querySelectorAll('.stat-value')[1]; 
             if(sent) sent.textContent = data.sent;
+
+            // 2. [NEW] Update Bot Count
+            // This targets the new card: <div id="stat-bots">...</div>
+            const botEl = document.getElementById('stat-bots');
+            if(botEl) {
+                // Add a small animation effect if the number changes
+                if (botEl.textContent != data.bots) {
+                    botEl.style.color = '#fff'; // Flash white briefly
+                    setTimeout(() => botEl.style.color = '', 500);
+                }
+                botEl.textContent = data.bots;
+            }
+
+            // 3. Update Charts (Existing)
             if (distributionChart) {
                 distributionChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
                 distributionChart.update('none');
@@ -465,6 +488,8 @@
                 statusChart.data.datasets[0].data = [data.sent, data.failed, data.pending];
                 statusChart.update('none');
             }
+
+            // 4. Update Progress Bar (Existing)
             const progBar = document.getElementById('progress-bar');
             if(progBar) {
                 progBar.style.width = data.sent_pct + '%';

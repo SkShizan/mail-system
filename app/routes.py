@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_file
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_file, make_response
 from flask_login import current_user, login_user, logout_user, login_required
 from app import db, login
 from app.models import Email, SMTPSettings, Campaign, User
@@ -368,10 +368,15 @@ def campaign_stats_api(id):
 
     # Use SQL Counts for performance
     base_query = Email.query.filter_by(campaign_id=id)
+
     total = base_query.count()
     sent = base_query.filter_by(status='sent').count()
     failed = base_query.filter_by(status='failed').count()
+
+    # [UPDATED] Count Humans vs Bots
     opened = base_query.filter(Email.opened_at != None).count()
+    bots = base_query.filter(Email.bot_detected_at != None).count()
+
     pending = total - sent - failed
     processing = pending > 0 or sent > 0
 
@@ -386,6 +391,7 @@ def campaign_stats_api(id):
         'sent': sent,
         'failed': failed,
         'opened': opened,
+        'bots': bots,  # <--- NEW FIELD SENT TO FRONTEND
         'pending': pending,
         'processing': processing,
         'sent_pct': round((sent / total * 100), 1) if total > 0 else 0,
@@ -397,20 +403,92 @@ def campaign_stats_api(id):
 
 @bp.route('/track/<tracking_id>', methods=['GET'])
 def track_email_open(tracking_id):
-    """Handle email open tracking pixel requests"""
+    """
+    Level 3 Protection: Proxy-Aware Apple MPP Detection
+    """
     email = Email.query.filter_by(tracking_id=tracking_id).first()
-    if email and not email.opened_at:
-        email.opened_at = datetime.utcnow()
-        db.session.commit()
-        import sys
-        print(f"✅ TRACKED: Email {email.id} opened via {tracking_id}", file=sys.stderr)
 
-    # Return 1x1 transparent GIF pixel
+    # Return pixel immediately if email not found
+    if not email:
+        return _serve_pixel()
+
+    # --- 1. GET REAL IP (The Fix) ---
+    # Replit/Cloud providers put the real IP in the 'X-Forwarded-For' header
+    if request.headers.getlist("X-Forwarded-For"):
+        ip_address = request.headers.getlist("X-Forwarded-For")[0]
+    else:
+        ip_address = request.remote_addr or '0.0.0.0'
+
+    user_agent = request.headers.get('User-Agent', '').lower()
+
+    # --- 2. DEFINE BOT SIGNATURES ---
+    bot_signatures = [
+        'googleimageproxy', 'yahoomailproxy', 'bot', 'spider', 'crawl', 
+        'curl', 'wget', 'python', 'barracuda', 'mimecast', 'preview',
+        'facebookexternalhit', 'whatsapp', 'slackbot'
+    ]
+
+    # --- 3. RUN CHECKS ---
+
+    # CHECK A: Is it a known bot UA?
+    is_ua_bot = any(sig in user_agent for sig in bot_signatures)
+
+    # CHECK B: Is it from Apple's IP Range? (17.x.x.x)
+    # Apple's Mail Privacy Protection uses the 17.0.0.0/8 block
+    is_apple_ip = ip_address.strip().startswith('17.')
+
+    # CHECK C: The "Speed Limit" (Instant Opens)
+    # If the email is opened within 5 seconds of being CREATED, it's likely a bot.
+    # (Note: This is less reliable if you schedule emails, but helps for immediate sends)
+    is_too_fast = False
+    if email.created_at:
+        delta = datetime.utcnow() - email.created_at
+        if delta.total_seconds() < 5: 
+            is_too_fast = True
+
+    # Combined Decision
+    is_bot = is_ua_bot or is_apple_ip or is_too_fast
+
+    try:
+        # Save info for debugging
+        if hasattr(email, 'open_user_agent'):
+            email.open_user_agent = request.headers.get('User-Agent', '')[:255]
+        if hasattr(email, 'open_ip_address'):
+            email.open_ip_address = ip_address
+
+        # --- DEBUG LOGGING (Check your Console!) ---
+        import sys
+        log_msg = f"[TRACK] IP={ip_address} | UA={user_agent[:20]}... | Apple={is_apple_ip} | Fast={is_too_fast}"
+
+        if is_bot:
+            # BOT DETECTED
+            if hasattr(email, 'bot_detected_at') and not email.bot_detected_at:
+                email.bot_detected_at = datetime.utcnow()
+            print(f"🤖 {log_msg} -> BLOCKED", file=sys.stderr)
+
+        else:
+            # HUMAN DETECTED
+            if not email.opened_at:
+                email.opened_at = datetime.utcnow()
+                print(f"✅ {log_msg} -> OPENED", file=sys.stderr)
+
+        db.session.commit()
+
+    except Exception as e:
+        print(f"Tracking DB Error: {e}")
+        db.session.rollback()
+
+    return _serve_pixel()
+
+def _serve_pixel():
     pixel = BytesIO()
     pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
     pixel.seek(0)
-    return send_file(pixel, mimetype='image/gif', cache_control='no-cache, no-store, must-revalidate')
-
+    response = make_response(send_file(pixel, mimetype='image/gif'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 # --- NEW CLICK TRACKING ROUTE ---
 @bp.route('/click/<tracking_id>')
 def track_click(tracking_id):
