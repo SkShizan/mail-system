@@ -404,7 +404,7 @@ def campaign_stats_api(id):
 @bp.route('/track/<tracking_id>', methods=['GET'])
 def track_email_open(tracking_id):
     """
-    Level 3 Protection: Proxy-Aware Apple MPP Detection
+    Advanced Bot Detection: Apple MPP, Proxies, and Automated Services
     """
     email = Email.query.filter_by(tracking_id=tracking_id).first()
 
@@ -422,32 +422,47 @@ def track_email_open(tracking_id):
     user_agent = request.headers.get('User-Agent', '').lower()
 
     # --- 2. DEFINE BOT SIGNATURES ---
-    bot_signatures = [
+    bot_ua_signatures = [
         'googleimageproxy', 'yahoomailproxy', 'bot', 'spider', 'crawl', 
         'curl', 'wget', 'python', 'barracuda', 'mimecast', 'preview',
-        'facebookexternalhit', 'whatsapp', 'slackbot'
+        'facebookexternalhit', 'whatsapp', 'slackbot', 'mailtrack', 'protonmail',
+        'facebook', 'google', 'apple', 'mozilla', 'version', 'compatible'
     ]
-
+    
+    # Apple Mail Privacy Protection fingerprints
+    apple_ua_signatures = ['mail privacy protection', 'apple-mail', 'applemailprotection']
+    
+    # Email proxy services
+    proxy_ips = ['74.125.', '64.233.', '2607:f8b0:']  # Google IP ranges
+    
     # --- 3. RUN CHECKS ---
 
     # CHECK A: Is it a known bot UA?
-    is_ua_bot = any(sig in user_agent for sig in bot_signatures)
-
-    # CHECK B: Is it from Apple's IP Range? (17.x.x.x)
-    # Apple's Mail Privacy Protection uses the 17.0.0.0/8 block
-    is_apple_ip = ip_address.strip().startswith('17.')
-
-    # CHECK C: The "Speed Limit" (Instant Opens)
-    # If the email is opened within 5 seconds of being CREATED, it's likely a bot.
-    # (Note: This is less reliable if you schedule emails, but helps for immediate sends)
+    is_ua_bot = any(sig in user_agent for sig in bot_ua_signatures)
+    
+    # CHECK B: Apple Mail Privacy Protection signals
+    # Signals: 1) Apple in UA, 2) Missing User-Agent, 3) Too fast, 4) Proxy IPs
+    is_apple_mpp = (
+        any(sig in user_agent for sig in apple_ua_signatures) or
+        not user_agent or  # Missing User-Agent = suspicious
+        ip_address.strip().startswith('17.')  # Apple corporate IPs
+    )
+    
+    # CHECK C: Email proxy service (Google, etc)
+    is_proxy = any(ip_prefix in ip_address for ip_prefix in proxy_ips)
+    
+    # CHECK D: The "Speed Limit" (Instant Opens) - VERY strong signal
     is_too_fast = False
     if email.created_at:
         delta = datetime.utcnow() - email.created_at
-        if delta.total_seconds() < 5: 
+        if delta.total_seconds() < 3:  # Reduced to 3 seconds (bots are instant)
             is_too_fast = True
 
     # Combined Decision
-    is_bot = is_ua_bot or is_apple_ip or is_too_fast
+    # If it's Apple + Proxy = LIKELY BOT
+    # If it's too fast = LIKELY BOT  
+    # If it's just UA bot = BOT
+    is_bot = is_ua_bot or is_too_fast or (is_apple_mpp and is_proxy)
 
     try:
         # Save info for debugging
@@ -458,7 +473,7 @@ def track_email_open(tracking_id):
 
         # --- DEBUG LOGGING (Check your Console!) ---
         import sys
-        log_msg = f"[TRACK] IP={ip_address} | UA={user_agent[:20]}... | Apple={is_apple_ip} | Fast={is_too_fast}"
+        log_msg = f"[TRACK] IP={ip_address} | UA={user_agent[:30] if user_agent else 'NONE'}... | Apple={is_apple_mpp} | Proxy={is_proxy} | Fast={is_too_fast}"
 
         if is_bot:
             # BOT DETECTED
