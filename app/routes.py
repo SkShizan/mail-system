@@ -794,6 +794,50 @@ def add_emails_to_campaign(id):
     flash(f"Added {emails_added} new emails to campaign.", "success")
     return redirect(url_for('main.campaign_details', id=id))
 
+@bp.route('/resend-otp')
+def resend_otp():
+    # 1. Get email from session
+    email = session.get('verify_email')
+
+    if not email:
+        flash('Session expired. Please try logging in again.', 'warning')
+        return redirect(url_for('main.login'))
+
+    # 2. Find User
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash('User not found.', 'danger')
+        return redirect(url_for('main.signup'))
+
+    # 3. Prevent Spam (Optional: Check if an OTP was sent < 1 min ago)
+    # You can implement a timestamp check here if needed
+
+    # 4. Generate New OTP
+    new_otp = ''.join(random.choices(string.digits, k=6))
+    user.otp_code = new_otp
+    db.session.commit()
+
+    # 5. Send Email
+    subject = "Resend: Verify Your Account"
+    body = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2>Verify Your Account</h2>
+        <p>You requested a new verification code.</p>
+        <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 24px; letter-spacing: 5px; font-weight: bold; color: #174143;">{new_otp}</span>
+        </div>
+        <p>If you did not request this, please ignore this email.</p>
+    </div>
+    """
+
+    if send_system_email(email, subject, body):
+        flash('A new OTP has been sent to your email.', 'success')
+    else:
+        # This will show if your SMTP settings are wrong
+        flash('Failed to send email. Please contact support.', 'danger')
+
+    return redirect(url_for('main.verify_otp'))
+
 @bp.route('/admin/user/<int:user_id>/edit', methods=['POST'])
 @login_required
 def admin_edit_user(user_id):
