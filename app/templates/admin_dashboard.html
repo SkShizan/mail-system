@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* --- Admin Specific Styles --- */
+    .search-glass {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+        border-radius: 50px;
+        padding-left: 2.5rem;
+        transition: all 0.3s ease;
+    }
+    .search-glass:focus {
+        background: rgba(0, 0, 0, 0.4);
+        border-color: var(--accent-color);
+        box-shadow: 0 0 15px rgba(249, 180, 135, 0.2);
+        color: white;
+    }
+    .search-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+    }
+
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        transition: all 0.2s;
+        border: 1px solid rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.02);
+        color: var(--text-secondary);
+    }
+    .action-btn:hover { transform: translateY(-2px); }
+    .action-btn.edit:hover { background: rgba(52, 152, 219, 0.2); color: #3498db; border-color: #3498db; }
+    .action-btn.key:hover { background: rgba(241, 196, 15, 0.2); color: #f1c40f; border-color: #f1c40f; }
+    .action-btn.delete:hover { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border-color: #e74c3c; }
+    .action-btn.approve:hover { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border-color: #2ecc71; }
+
+    .user-avatar {
+        width: 40px; height: 40px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold;
+        color: var(--accent-color);
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* --- Toggle Switch Styles --- */
+    .form-check-input:checked {
+        background-color: #2ecc71;
+        border-color: #2ecc71;
+    }
+    .form-check-input {
+        background-color: rgba(255,255,255,0.1);
+        border-color: rgba(255,255,255,0.2);
+        cursor: pointer;
+        width: 3em; /* Make it slightly wider for better click area */
+        height: 1.5em;
+    }
+    .form-check-input:focus {
+        box-shadow: 0 0 0 0.25rem rgba(46, 204, 113, 0.25);
+    }
+    .form-check-input.loading {
+        opacity: 0.5;
+        pointer-events: none;
+        cursor: wait;
+    }
+</style>
+
+<div class="container-fluid animate-in">
+    <div class="row align-items-center mb-4 g-3">
+        <div class="col-md-6">
+            <h2 class="text-white fw-bold mb-0">
+                <i class="fas fa-user-shield me-2 text-accent"></i>Admin Console
+            </h2>
+            <p class="text-muted small mb-0">Manage users, permissions, and subscriptions.</p>
+        </div>
+        <div class="col-md-6">
+            <div class="position-relative ms-auto" style="max-width: 400px;">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="userSearch" class="form-control search-glass" placeholder="Search users by name, email, or ID..." onkeyup="filterUsers()">
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-panel p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover text-white align-middle mb-0" id="usersTable">
+                <thead style="background: rgba(0,0,0,0.2);">
+                    <tr class="text-uppercase small text-muted" style="letter-spacing: 1px;">
+                        <th class="ps-4 py-3">User Identity</th>
+                        <th>Account Status</th>
+                        <th>Privileges</th>
+                        <th>Subscription</th>
+                        <th class="text-end pe-4">Controls</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for user in users %}
+                    <tr class="user-row">
+                        <td class="ps-4 py-3">
+                            <div class="d-flex align-items-center">
+                                <div class="user-avatar me-3">
+                                    {{ user.username[:2].upper() }}
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-white user-name">{{ user.username }}</div>
+                                    <div class="small text-muted user-email">{{ user.email }}</div>
+                                    <div class="d-none user-id">#{{ user.id }}</div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <td>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="form-check form-switch mb-0" style="min-height: auto;">
+                                    <input class="form-check-input" type="checkbox" role="switch" 
+                                           id="statusSwitch_{{ user.id }}"
+                                           onchange="toggleStatus({{ user.id }}, '{{ user.username }}')"
+                                           {% if user.is_active_user %}checked{% endif %}
+                                           {% if user.id == current_user.id %}disabled title="You cannot deactivate yourself"{% endif %}>
+                                </div>
+
+                                <span id="statusLabel_{{ user.id }}" 
+                                      class="badge rounded-pill {{ 'bg-success text-success' if user.is_active_user else 'bg-warning text-warning' }} bg-opacity-10 border {{ 'border-success' if user.is_active_user else 'border-warning' }} border-opacity-25"
+                                      style="min-width: 80px;">
+                                    {{ 'Active' if user.is_active_user else 'Inactive' }}
+                                </span>
+                            </div>
+
+                            <div class="mt-1 ms-1">
+                                {% if user.is_verified %}
+                                    <small class="text-muted" style="font-size: 0.7rem;"><i class="fas fa-check-circle text-success me-1"></i>Email Verified</small>
+                                {% else %}
+                                    <small class="text-muted" style="font-size: 0.7rem;"><i class="fas fa-times-circle text-danger me-1"></i>Unverified</small>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td>
+                            {% if user.is_admin %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">SUPER ADMIN</span>
+                            {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-muted border border-secondary border-opacity-25">STANDARD USER</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <form action="/admin/update_expiry/{{ user.id }}" method="POST" class="d-flex align-items-center gap-2">
+                                <input type="date" name="expiry_date" 
+                                       class="form-control form-control-sm bg-dark text-white border-secondary" 
+                                       style="width: 130px; font-size: 0.8rem;"
+                                       value="{{ user.valid_until.strftime('%Y-%m-%d') if user.valid_until else '' }}">
+                                <button type="submit" class="btn btn-sm btn-icon-glass" title="Update Expiry"><i class="fas fa-save"></i></button>
+                            </form>
+                        </td>
+
+                        <td class="text-end pe-4">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <button type="button" class="action-btn edit" data-bs-toggle="modal" data-bs-target="#editModal{{ user.id }}" title="Edit User">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+
+                                <button type="button" class="action-btn key" data-bs-toggle="modal" data-bs-target="#passwordModal{{ user.id }}" title="Change Password">
+                                    <i class="fas fa-key"></i>
+                                </button>
+
+                                {% if user.id != current_user.id %}
+                                <button type="button" class="action-btn delete" onclick="confirmDelete('{{ user.id }}', '{{ user.username }}')" title="Delete User">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div id="noResults" class="text-center py-5 d-none">
+                <i class="fas fa-search fa-3x text-muted mb-3 opacity-25"></i>
+                <h5 class="text-muted">No users found</h5>
+                <p class="text-muted small">Try adjusting your search criteria.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% for user in users %}
+
+<div class="modal fade" id="editModal{{ user.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-panel" style="background: #174143; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 0 50px rgba(0,0,0,0.5);">
+            <div class="modal-header border-bottom border-secondary p-4">
+                <h5 class="modal-title text-white fw-bold">Edit Profile: <span class="text-accent">{{ user.username }}</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/admin/user/{{ user.id }}/edit" method="POST">
+                <div class="modal-body p-4">
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Username</label>
+                        <input type="text" name="username" class="form-control" value="{{ user.username }}" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Email Address</label>
+                        <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+                    </div>
+
+                    <div class="p-3 rounded mb-3" style="background: rgba(0,0,0,0.2);">
+                        <div class="form-check form-switch d-flex justify-content-between align-items-center mb-3">
+                            <label class="form-check-label text-white" for="adminSwitch{{ user.id }}">
+                                Super Admin Privileges
+                                <div class="text-muted small fw-normal">Full access to system settings</div>
+                            </label>
+                            <input class="form-check-input" type="checkbox" name="is_admin" id="adminSwitch{{ user.id }}" {% if user.is_admin %}checked{% endif %}>
+                        </div>
+                        </div>
+                </div>
+                <div class="modal-footer border-top border-secondary p-3">
+                    <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-peach btn-sm">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passwordModal{{ user.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-panel" style="background: #174143; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 0 50px rgba(0,0,0,0.5);">
+            <div class="modal-header border-bottom border-secondary p-4">
+                <h5 class="modal-title text-white fw-bold">Reset Password</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/admin/user/{{ user.id }}/password" method="POST">
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-0 d-flex align-items-center mb-4">
+                        <i class="fas fa-exclamation-triangle me-3 fa-lg"></i>
+                        <div class="small">This will immediately invalidate the user's current password.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold text-uppercase">New Password</label>
+                        <input type="password" name="new_password" class="form-control" placeholder="Enter secure password" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary p-3">
+                    <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning btn-sm">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+
+<form id="deleteForm" method="POST" style="display: none;"></form>
+
+<script>
+// --- 1. Live Status Toggle Function (AJAX) ---
+async function toggleStatus(userId, username) {
+    const toggle = document.getElementById(`statusSwitch_${userId}`);
+    const label = document.getElementById(`statusLabel_${userId}`);
+
+    // UI Loading State
+    toggle.classList.add('loading');
+    const originalState = !toggle.checked; // Store old state to revert if error
+
+    try {
+        const response = await fetch(`/admin/user/${userId}/toggle-status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // Update UI on Success
+            if (data.new_status) {
+                label.textContent = "Active";
+                label.className = "badge rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25";
+                label.style.minWidth = "80px";
+            } else {
+                label.textContent = "Inactive";
+                label.className = "badge rounded-pill bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25";
+                label.style.minWidth = "80px";
+            }
+        } else {
+            // Revert on server error
+            alert(data.error || "Something went wrong.");
+            toggle.checked = originalState; 
+        }
+
+    } catch (error) {
+        console.error('Error:', error);
+        alert("Network error. Could not update status.");
+        toggle.checked = originalState;
+    } finally {
+        toggle.classList.remove('loading');
+    }
+}
+
+// --- 2. Dynamic Search Function ---
+function filterUsers() {
+    const input = document.getElementById('userSearch');
+    const filter = input.value.toLowerCase();
+    const rows = document.querySelectorAll('.user-row');
+    let hasResults = false;
+
+    rows.forEach(row => {
+        const name = row.querySelector('.user-name').textContent.toLowerCase();
+        const email = row.querySelector('.user-email').textContent.toLowerCase();
+        const id = row.querySelector('.user-id').textContent.toLowerCase();
+
+        if (name.includes(filter) || email.includes(filter) || id.includes(filter)) {
+            row.style.display = "";
+            hasResults = true;
+        } else {
+            row.style.display = "none";
+        }
+    });
+
+    const noResults = document.getElementById('noResults');
+    if (!hasResults && rows.length > 0) {
+        noResults.classList.remove('d-none');
+    } else {
+        noResults.classList.add('d-none');
+    }
+}
+
+// --- 3. Delete Confirmation ---
+function confirmDelete(userId, username) {
+    if (confirm(`Are you sure you want to PERMANENTLY delete user "${username}"?\n\nThis will delete all their campaigns, emails, and settings.\nThis action cannot be undone.`)) {
+        const form = document.getElementById('deleteForm');
+        form.action = `/admin/user/${userId}/delete`;
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

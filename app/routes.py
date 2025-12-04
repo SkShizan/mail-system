@@ -1,17 +1,42 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_file, make_response
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_file, session
 from flask_login import current_user, login_user, logout_user, login_required
 from app import db, login
 from app.models import Email, SMTPSettings, Campaign, User
 # Note: ClickEvent is optional depending on if you created that model
 from datetime import datetime, timedelta
-import pytz
 from io import BytesIO
 from urllib.parse import unquote
+import random
+import string
+import pytz
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from flask import current_app, abort
+from app.models import ClickEvent
 
 user_tz = pytz.timezone("Asia/Kolkata")
 utc = pytz.UTC
 
 bp = Blueprint('main', __name__)
+
+def send_system_email(to_email, subject, body):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = current_app.config['SYSTEM_MAIL_SENDER']
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'html'))
+
+        server = smtplib.SMTP(current_app.config['SYSTEM_MAIL_SERVER'], current_app.config['SYSTEM_MAIL_PORT'])
+        server.starttls()
+        server.login(current_app.config['SYSTEM_MAIL_USERNAME'], current_app.config['SYSTEM_MAIL_PASSWORD'])
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"System Email Error: {e}")
+        return False
 
 @login.user_loader
 def load_user(id):
@@ -23,35 +48,166 @@ def load_user(id):
 def signup():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+
     if request.method == 'POST':
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
 
-        if User.query.filter((User.username == username) | (User.email == email)).first():
-            flash('Username or Email already exists.', 'danger')
+        # 1. Check if EMAIL exists specifically
+        existing_email_user = User.query.filter_by(email=email).first()
+
+        if existing_email_user:
+            if not existing_email_user.is_verified:
+                # Logic: User exists but not verified -> Resend OTP & Redirect
+                otp = ''.join(random.choices(string.digits, k=6))
+                existing_email_user.otp_code = otp
+                # Optional: Update password if you want to allow password reset on re-signup
+                # existing_email_user.set_password(password) 
+                db.session.commit()
+
+                send_system_email(email, "Verify Your Account", f"<h3>Your New OTP is: <b>{otp}</b></h3><p>Enter this on the verification page.</p>")
+
+                session['verify_email'] = email
+                flash('Account already exists but is not verified. We have sent a new OTP.', 'warning')
+                return redirect(url_for('main.verify_otp'))
+            else:
+                # Logic: User exists and IS verified
+                flash('Email already registered. Please login.', 'danger')
+                return redirect(url_for('main.login'))
+
+        # 2. Check if USERNAME exists
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists. Please choose another.', 'danger')
             return redirect(url_for('main.signup'))
 
-        user = User(username=username, email=email)
+        # 3. Create NEW User (if no conflicts)
+        otp = ''.join(random.choices(string.digits, k=6))
+        user = User(username=username, email=email, otp_code=otp, is_verified=False, is_active_user=False)
         user.set_password(password)
+
+        # Make the first user an admin automatically
+        if User.query.count() == 0:
+            user.is_admin = True
+            user.is_active_user = True
+            user.is_verified = True
+
         db.session.add(user)
         db.session.commit()
-        flash('Registration successful! Please login.', 'success')
-        return redirect(url_for('main.login'))
+
+        # Send OTP
+        send_system_email(email, "Verify Your Account", f"<h3>Your OTP is: <b>{otp}</b></h3><p>Enter this on the verification page.</p>")
+
+        session['verify_email'] = email
+
+        flash('Registration successful! Please check your email for OTP.', 'info')
+        return redirect(url_for('main.verify_otp'))
+
     return render_template('signup.html')
+
+@bp.route('/verify-otp', methods=['GET', 'POST'])
+def verify_otp():
+    # CORRECTED LINE: Use 'session', not 'db.session'
+    email = session.get('verify_email')
+
+    if not email:
+        flash('Session expired. Please login to verify.', 'warning')
+        return redirect(url_for('main.login'))
+
+    if request.method == 'POST':
+        otp_input = request.form['otp']
+        user = User.query.filter_by(email=email).first()
+
+        if user and user.otp_code == otp_input:
+            user.is_verified = True
+            user.otp_code = None # Clear OTP
+            db.session.commit()
+
+            # Clear the session variable
+            session.pop('verify_email', None)
+
+            flash('Email verified! You can now login.', 'success')
+            return redirect(url_for('main.login'))
+        else:
+            flash('Invalid OTP. Please try again.', 'danger')
+
+    return render_template('verify_otp.html')
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+
     if request.method == 'POST':
         user = User.query.filter_by(username=request.form['username']).first()
+
         if user is None or not user.check_password(request.form['password']):
             flash('Invalid username or password', 'danger')
             return redirect(url_for('main.login'))
+
+        # CHECK 1: OTP Verification
+        if not user.is_verified:
+            # CORRECTED LINE: Use 'session'
+            session['verify_email'] = user.email
+            flash('Please verify your email first.', 'warning')
+            return redirect(url_for('main.verify_otp'))
+
+        # CHECK 2: Admin Approval (is_active_user)
+        if not user.is_active_user:
+            flash('Your account is pending Admin approval.', 'warning')
+            return redirect(url_for('main.login'))
+
+        # CHECK 3: Expiry Date
+        if user.valid_until and datetime.utcnow() > user.valid_until:
+            flash('Your subscription has expired. Contact Admin.', 'danger')
+            return redirect(url_for('main.login'))
+
         login_user(user)
         return redirect(url_for('main.index'))
+
     return render_template('login.html')
+
+@bp.route('/admin')
+@login_required
+def admin_dashboard():
+    if not current_user.is_admin:
+        abort(403) # Forbidden
+
+    users = User.query.order_by(User.id).all()
+    return render_template('admin_dashboard.html', users=users)
+
+@bp.route('/admin/approve/<int:user_id>')
+@login_required
+def approve_user(user_id):
+    if not current_user.is_admin: abort(403)
+
+    user = User.query.get_or_404(user_id)
+    user.is_active_user = True
+    # Set default validity (e.g., 30 days)
+    if not user.valid_until:
+        user.valid_until = datetime.utcnow() + timedelta(days=30)
+
+    db.session.commit()
+    flash(f'User {user.username} approved!', 'success')
+    return redirect(url_for('main.admin_dashboard'))
+
+@bp.route('/admin/update_expiry/<int:user_id>', methods=['POST'])
+@login_required
+def update_expiry(user_id):
+    if not current_user.is_admin: abort(403)
+
+    user = User.query.get_or_404(user_id)
+    date_str = request.form.get('expiry_date') # Format YYYY-MM-DD
+
+    if date_str:
+        try:
+            user.valid_until = datetime.strptime(date_str, '%Y-%m-%d')
+            db.session.commit()
+            flash('Validity updated.', 'success')
+        except:
+            flash('Invalid date format.', 'danger')
+
+    return redirect(url_for('main.admin_dashboard'))
 
 @bp.route('/logout')
 def logout():
@@ -368,15 +524,10 @@ def campaign_stats_api(id):
 
     # Use SQL Counts for performance
     base_query = Email.query.filter_by(campaign_id=id)
-
     total = base_query.count()
     sent = base_query.filter_by(status='sent').count()
     failed = base_query.filter_by(status='failed').count()
-
-    # [UPDATED] Count Humans vs Bots
     opened = base_query.filter(Email.opened_at != None).count()
-    bots = base_query.filter(Email.bot_detected_at != None).count()
-
     pending = total - sent - failed
     processing = pending > 0 or sent > 0
 
@@ -391,7 +542,6 @@ def campaign_stats_api(id):
         'sent': sent,
         'failed': failed,
         'opened': opened,
-        'bots': bots,  # <--- NEW FIELD SENT TO FRONTEND
         'pending': pending,
         'processing': processing,
         'sent_pct': round((sent / total * 100), 1) if total > 0 else 0,
@@ -403,107 +553,20 @@ def campaign_stats_api(id):
 
 @bp.route('/track/<tracking_id>', methods=['GET'])
 def track_email_open(tracking_id):
-    """
-    Advanced Bot Detection: Apple MPP, Proxies, and Automated Services
-    """
+    """Handle email open tracking pixel requests"""
     email = Email.query.filter_by(tracking_id=tracking_id).first()
-
-    # Return pixel immediately if email not found
-    if not email:
-        return _serve_pixel()
-
-    # --- 1. GET REAL IP (The Fix) ---
-    # Replit/Cloud providers put the real IP in the 'X-Forwarded-For' header
-    if request.headers.getlist("X-Forwarded-For"):
-        ip_address = request.headers.getlist("X-Forwarded-For")[0]
-    else:
-        ip_address = request.remote_addr or '0.0.0.0'
-
-    user_agent = request.headers.get('User-Agent', '').lower()
-
-    # --- 2. DEFINE BOT SIGNATURES ---
-    bot_ua_signatures = [
-        'googleimageproxy', 'yahoomailproxy', 'bot', 'spider', 'crawl', 
-        'curl', 'wget', 'python', 'barracuda', 'mimecast', 'preview',
-        'facebookexternalhit', 'whatsapp', 'slackbot', 'mailtrack', 'protonmail',
-        'facebook', 'google', 'apple', 'mozilla', 'version', 'compatible'
-    ]
-    
-    # Apple Mail Privacy Protection fingerprints
-    apple_ua_signatures = ['mail privacy protection', 'apple-mail', 'applemailprotection']
-    
-    # Email proxy services
-    proxy_ips = ['74.125.', '64.233.', '2607:f8b0:']  # Google IP ranges
-    
-    # --- 3. RUN CHECKS ---
-
-    # CHECK A: Is it a known bot UA?
-    is_ua_bot = any(sig in user_agent for sig in bot_ua_signatures)
-    
-    # CHECK B: Apple Mail Privacy Protection signals
-    # Signals: 1) Apple in UA, 2) Missing User-Agent, 3) Too fast, 4) Proxy IPs
-    is_apple_mpp = (
-        any(sig in user_agent for sig in apple_ua_signatures) or
-        not user_agent or  # Missing User-Agent = suspicious
-        ip_address.strip().startswith('17.')  # Apple corporate IPs
-    )
-    
-    # CHECK C: Email proxy service (Google, etc)
-    is_proxy = any(ip_prefix in ip_address for ip_prefix in proxy_ips)
-    
-    # CHECK D: The "Speed Limit" (Instant Opens) - VERY strong signal
-    is_too_fast = False
-    if email.created_at:
-        delta = datetime.utcnow() - email.created_at
-        if delta.total_seconds() < 3:  # Reduced to 3 seconds (bots are instant)
-            is_too_fast = True
-
-    # Combined Decision
-    # If it's Apple + Proxy = LIKELY BOT
-    # If it's too fast = LIKELY BOT  
-    # If it's just UA bot = BOT
-    is_bot = is_ua_bot or is_too_fast or (is_apple_mpp and is_proxy)
-
-    try:
-        # Save info for debugging
-        if hasattr(email, 'open_user_agent'):
-            email.open_user_agent = request.headers.get('User-Agent', '')[:255]
-        if hasattr(email, 'open_ip_address'):
-            email.open_ip_address = ip_address
-
-        # --- DEBUG LOGGING (Check your Console!) ---
-        import sys
-        log_msg = f"[TRACK] IP={ip_address} | UA={user_agent[:30] if user_agent else 'NONE'}... | Apple={is_apple_mpp} | Proxy={is_proxy} | Fast={is_too_fast}"
-
-        if is_bot:
-            # BOT DETECTED
-            if hasattr(email, 'bot_detected_at') and not email.bot_detected_at:
-                email.bot_detected_at = datetime.utcnow()
-            print(f"🤖 {log_msg} -> BLOCKED", file=sys.stderr)
-
-        else:
-            # HUMAN DETECTED
-            if not email.opened_at:
-                email.opened_at = datetime.utcnow()
-                print(f"✅ {log_msg} -> OPENED", file=sys.stderr)
-
+    if email and not email.opened_at:
+        email.opened_at = datetime.utcnow()
         db.session.commit()
+        import sys
+        print(f"✅ TRACKED: Email {email.id} opened via {tracking_id}", file=sys.stderr)
 
-    except Exception as e:
-        print(f"Tracking DB Error: {e}")
-        db.session.rollback()
-
-    return _serve_pixel()
-
-def _serve_pixel():
+    # Return 1x1 transparent GIF pixel
     pixel = BytesIO()
     pixel.write(b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b')
     pixel.seek(0)
-    response = make_response(send_file(pixel, mimetype='image/gif'))
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    return send_file(pixel, mimetype='image/gif', cache_control='no-cache, no-store, must-revalidate')
+
 # --- NEW CLICK TRACKING ROUTE ---
 @bp.route('/click/<tracking_id>')
 def track_click(tracking_id):
@@ -730,3 +793,202 @@ def add_emails_to_campaign(id):
     db.session.commit()
     flash(f"Added {emails_added} new emails to campaign.", "success")
     return redirect(url_for('main.campaign_details', id=id))
+
+@bp.route('/admin/user/<int:user_id>/edit', methods=['POST'])
+@login_required
+def admin_edit_user(user_id):
+    if not current_user.is_admin: abort(403)
+
+    user = User.query.get_or_404(user_id)
+
+    # Update Basic Info
+    user.username = request.form.get('username')
+    user.email = request.form.get('email')
+
+    # Update Roles/Status
+    # Checkboxes only send value if checked
+    user.is_admin = bool(request.form.get('is_admin'))
+    user.is_active_user = bool(request.form.get('is_active'))
+
+    try:
+        db.session.commit()
+        flash(f'User {user.username} updated successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating user: {e}', 'danger')
+
+    return redirect(url_for('main.admin_dashboard'))
+
+@bp.route('/admin/user/<int:user_id>/password', methods=['POST'])
+@login_required
+def admin_reset_password(user_id):
+    if not current_user.is_admin: abort(403)
+
+    user = User.query.get_or_404(user_id)
+    new_pass = request.form.get('new_password')
+
+    if new_pass:
+        user.set_password(new_pass)
+        db.session.commit()
+        flash(f'Password for {user.username} has been changed.', 'success')
+    else:
+        flash('Password cannot be empty.', 'warning')
+
+    return redirect(url_for('main.admin_dashboard'))
+
+@bp.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if not current_user.is_admin: abort(403)
+
+    if user_id == current_user.id:
+        flash("You cannot delete yourself!", "danger")
+        return redirect(url_for('main.admin_dashboard'))
+
+    user = User.query.get_or_404(user_id)
+    username = user.username
+
+    try:
+        # 1. Delete SMTP Settings
+        if user.smtp_settings:
+            db.session.delete(user.smtp_settings)
+
+        # 2. Delete Campaigns and their Emails (Cascading manually for safety)
+        for campaign in user.campaigns:
+            # Delete Emails
+            emails = Email.query.filter_by(campaign_id=campaign.id).all()
+            for email in emails:
+                # Delete ClickEvents first
+                ClickEvent.query.filter_by(email_id=email.id).delete()
+                db.session.delete(email)
+
+            # Delete Campaign
+            db.session.delete(campaign)
+
+        # 3. Delete the User
+        db.session.delete(user)
+        db.session.commit()
+
+        flash(f'User "{username}" and all their data have been deleted.', 'info')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {e}', 'danger')
+
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+
+        if user:
+            # Generate OTP
+            otp = ''.join(random.choices(string.digits, k=6))
+            user.otp_code = otp
+            db.session.commit()
+
+            # Send Email
+            email_body = f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
+                <div style="background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <h2 style="color: #174143;">Password Reset Request</h2>
+                    <p>You requested to reset your password. Your OTP code is:</p>
+                    <h1 style="color: #F9B487; letter-spacing: 5px;">{otp}</h1>
+                    <p>If you did not request this, please ignore this email.</p>
+                </div>
+            </div>
+            """
+            send_system_email(email, "Reset Your Password", email_body)
+
+            # Store email in session for the next step
+            session['reset_email'] = email
+            flash('An OTP has been sent to your email address.', 'info')
+            return redirect(url_for('main.verify_reset_otp'))
+        else:
+            # For security, we can genericize this message, or keep it specific for UX
+            flash('No account found with that email address.', 'danger')
+
+    return render_template('forgot_password.html')
+
+@bp.route('/verify-reset-otp', methods=['GET', 'POST'])
+def verify_reset_otp():
+    email = session.get('reset_email')
+    if not email:
+        flash('Session expired. Please start over.', 'warning')
+        return redirect(url_for('main.forgot_password'))
+
+    if request.method == 'POST':
+        otp_input = request.form.get('otp')
+        user = User.query.filter_by(email=email).first()
+
+        if user and user.otp_code and user.otp_code == otp_input:
+            # Mark session as verified for reset
+            session['allow_password_reset'] = True
+
+            # Clear OTP immediately to prevent reuse
+            user.otp_code = None
+            db.session.commit()
+
+            flash('OTP Verified! Please set your new password.', 'success')
+            return redirect(url_for('main.reset_password'))
+        else:
+            flash('Invalid or expired OTP. Please try again.', 'danger')
+
+    return render_template('verify_reset_otp.html')
+
+@bp.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    # Security Check: Ensure user passed the previous steps
+    if not session.get('allow_password_reset') or not session.get('reset_email'):
+        return redirect(url_for('main.login'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+        else:
+            email = session.get('reset_email')
+            user = User.query.filter_by(email=email).first()
+
+            if user:
+                user.set_password(password)
+                db.session.commit()
+
+                # Clear session security flags
+                session.pop('allow_password_reset', None)
+                session.pop('reset_email', None)
+
+                flash('Your password has been reset successfully. Please login.', 'success')
+                return redirect(url_for('main.login'))
+
+    return render_template('reset_password.html')
+
+@bp.route('/admin/user/<int:user_id>/toggle-status', methods=['POST'])
+@login_required
+def toggle_user_status(user_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get_or_404(user_id)
+
+    # Prevent admin from deactivating themselves
+    if user.id == current_user.id:
+         return jsonify({'error': 'You cannot deactivate your own account'}), 400
+
+    # Flip the status
+    user.is_active_user = not user.is_active_user
+    db.session.commit()
+
+    return jsonify({
+        'success': True, 
+        'new_status': user.is_active_user,
+        'username': user.username
+    })

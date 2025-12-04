@@ -23,3 +23,10 @@ class Config:
             'schedule': 10.0,
         },
     }
+
+    SYSTEM_MAIL_SERVER = os.environ.get('SYSTEM_MAIL_SERVER') or 'smtp.gmail.com'
+    SYSTEM_MAIL_PORT = int(os.environ.get('SYSTEM_MAIL_PORT') or 587)
+    SYSTEM_MAIL_USE_TLS = os.environ.get('SYSTEM_MAIL_USE_TLS') is not None
+    SYSTEM_MAIL_USERNAME = os.environ.get('SYSTEM_MAIL_USERNAME')
+    SYSTEM_MAIL_PASSWORD = os.environ.get('SYSTEM_MAIL_PASSWORD')
+    SYSTEM_MAIL_SENDER = os.environ.get('SYSTEM_MAIL_SENDER')

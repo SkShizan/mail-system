@@ -9,6 +9,12 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256))
 
+    is_verified = db.Column(db.Boolean, default=False)       # Email OTP Verified
+    otp_code = db.Column(db.String(6), nullable=True)        # Temporary OTP
+    is_admin = db.Column(db.Boolean, default=False)          # Super Admin flag
+    is_active_user = db.Column(db.Boolean, default=False)    # Admin Approval status
+    valid_until = db.Column(db.DateTime, nullable=True)
+
     # Relationships
     campaigns = db.relationship('Campaign', backref='owner', lazy=True)
     smtp_settings = db.relationship('SMTPSettings', backref='owner', uselist=False, lazy=True)
@@ -18,6 +24,24 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    # --- THE FIX: OVERRIDE FLASK-LOGIN'S DEFAULT CHECK ---
+    @property
+    def is_active(self):
+        """
+        Flask-Login calls this property on every request.
+        If it returns False, the user is logged out immediately.
+        """
+        # 1. If Admin set is_active_user to False, Block access
+        if not self.is_active_user:
+            return False
+
+        # 2. (Optional but Smart) If subscription expired, Block access
+        # Ensure we compare timezone-naive datetimes or consistent UTC
+        if self.valid_until and datetime.utcnow() > self.valid_until:
+             return False
+
+        return True
 
 class SMTPSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,9 +75,6 @@ class Email(db.Model):
     tracking_id = db.Column(db.String(50), unique=True, nullable=True)
     opened_at = db.Column(db.DateTime, nullable=True)
     clicked_at = db.Column(db.DateTime, nullable=True)
-    open_user_agent = db.Column(db.String(256), nullable=True) # Browser/Device info
-    open_ip_address = db.Column(db.String(50), nullable=True)  # Sender IP
-    bot_detected_at = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<Email {self.id} to {self.recipient}>'
