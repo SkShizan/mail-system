@@ -40,3 +40,4 @@ htmlcov/
 *.sqlite
 *.sqlite3
 .env
+.env
