@@ -10,7 +10,8 @@
             <div class="mb-4">
                 <label for="campaign_name" class="form-label">Campaign Name</label>
                 <input type="text" class="form-control" id="campaign_name" name="campaign_name"
-                       placeholder="e.g., Monthly Newsletter" required>
+                       placeholder="e.g., Monthly Newsletter" 
+                       value="{{ prefill.name if prefill else '' }}" required>
             </div>
 
             <div class="mb-4">
@@ -29,14 +30,18 @@
 
             <div class="mb-4">
                 <label class="form-label">Or Enter Emails Manually</label>
-                <textarea class="form-control" id="recipients" name="recipients" rows="2"
-                          placeholder="user@example.com, another@example.com"></textarea>
+                <textarea class="form-control" id="recipients" name="recipients" rows="4"
+                          placeholder="user@example.com, another@example.com">{{ prefill.recipients if prefill else '' }}</textarea>
+                {% if prefill and prefill.recipients %}
+                <div class="form-text text-success"><i class="fas fa-check-circle me-1"></i> Loaded recipients from previous campaign.</div>
+                {% endif %}
             </div>
 
             <div class="mb-4">
                 <label class="form-label">Subject</label>
                 <input type="text" class="form-control" id="subject" name="subject"
-                       placeholder="Enter email subject" required>
+                       placeholder="Enter email subject" 
+                       value="{{ prefill.subject if prefill else '' }}" required>
             </div>
 
             <div class="mb-3">
@@ -117,6 +122,13 @@
         }
     });
 
+    // [UPDATED] Check for pre-filled body content and load it
+    {% if prefill and prefill.body %}
+        const initialContent = {{ prefill.body | tojson }};
+        quill.clipboard.dangerouslyPasteHTML(initialContent);
+        document.getElementById('htmlInput').value = initialContent;
+    {% endif %}
+
     // -------------- Toggle Logic -------------------------
     let useHtml = false;
 
@@ -164,25 +176,21 @@
     let isTrackingConfirmed = false;
 
     composeForm.addEventListener('submit', function(e) {
-        if (isTrackingConfirmed) return true; // Allow submit if already confirmed
+        if (isTrackingConfirmed) return true; 
 
-        e.preventDefault(); // Stop initial submit
+        e.preventDefault(); 
 
-        // Get content based on active mode
         let content = useHtml ? htmlInput.value : quill.root.innerHTML;
         
-        // Parse content to find links
         const parser = new DOMParser();
         const doc = parser.parseFromString(content, 'text/html');
         const links = doc.getElementsByTagName('a');
 
-        // If no links found, just submit immediately
         if (links.length === 0) {
             finalSubmit(content);
             return;
         }
 
-        // Show Modal with links
         const linkList = document.getElementById('linkList');
         linkList.innerHTML = '';
         
@@ -207,27 +215,21 @@
     });
 
     function confirmSubmission() {
-        // 1. Get content again
         let content = useHtml ? htmlInput.value : quill.root.innerHTML;
         const parser = new DOMParser();
         const doc = parser.parseFromString(content, 'text/html');
         const links = doc.getElementsByTagName('a');
 
-        // 2. Mark selected links with data-track="true"
         const checkboxes = document.querySelectorAll('#linkList input[type="checkbox"]');
         checkboxes.forEach(cb => {
             if (cb.checked) {
-                // Find the corresponding link in the DOM and tag it
                 if (links[cb.value]) {
                     links[cb.value].setAttribute('data-track', 'true');
                 }
             }
         });
 
-        // 3. Serialize back to string
         const finalHtml = doc.body.innerHTML;
-
-        // 4. Update hidden input and submit
         finalSubmit(finalHtml);
     }
 

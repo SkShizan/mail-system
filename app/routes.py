@@ -317,6 +317,25 @@ def index():
 @bp.route('/compose', methods=['GET', 'POST'])
 @login_required
 def compose():
+    # [NEW] Pre-fill logic for "Re-Camp" feature
+    prefill = {}
+    duplicate_id = request.args.get('duplicate_from')
+
+    if duplicate_id and request.method == 'GET':
+        source_campaign = Campaign.query.filter_by(id=duplicate_id, user_id=current_user.id).first()
+        if source_campaign:
+            # Fetch the first email to get the Template (Subject & Body)
+            sample = Email.query.filter_by(campaign_id=source_campaign.id).first()
+            if sample:
+                prefill['name'] = f"Re: {source_campaign.name}"
+                prefill['subject'] = sample.subject
+                prefill['body'] = sample.body
+
+                # Fetch all recipients and join them into a string
+                # Note: This puts all emails into the manual text box
+                recipients = Email.query.with_entities(Email.recipient).filter_by(campaign_id=source_campaign.id).all()
+                prefill['recipients'] = ", ".join([r.recipient for r in recipients])
+
     if request.method == 'POST':
         campaign_name = request.form.get('campaign_name')
         recipients_str = request.form.get('recipients')
@@ -384,8 +403,8 @@ def compose():
                 flash(f"Error processing file: {e}", 'danger')
                 return redirect(url_for('main.compose'))
 
-        # Method 2: Manual recipients
-        elif recipients_str:
+        # Method 2: Manual recipients (This handles the Re-Camp list)
+        if recipients_str:
             recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
             for r in recipients:
                 emails_to_send.append({
@@ -393,11 +412,12 @@ def compose():
                     'subject': subject_template,
                     'body': body_template
                 })
-        else:
+
+        if not emails_to_send:
             flash('Please provide recipients or upload a file', 'warning')
             return redirect(url_for('main.compose'))
 
-        # Deduplicate emails by recipient (prevent sending to same email twice)
+        # Deduplicate emails by recipient
         seen_recipients = set()
         unique_emails = []
         duplicates_removed = 0
@@ -422,13 +442,11 @@ def compose():
             db.session.add(new_email)
 
         db.session.commit()
-        if duplicates_removed > 0:
-            flash(f'Campaign "{campaign_name}" created with {len(unique_emails)} emails. ({duplicates_removed} duplicates removed)', 'success')
-        else:
-            flash(f'Campaign "{campaign_name}" created with {len(unique_emails)} emails.', 'success')
+        flash(f'Campaign "{campaign_name}" created with {len(unique_emails)} emails.', 'success')
         return redirect(url_for('main.campaigns'))
 
-    return render_template('compose.html')
+    # Pass prefill data to template
+    return render_template('compose.html', prefill=prefill)
 
 @bp.route('/campaigns')
 @login_required
@@ -508,13 +526,56 @@ def campaign_details(id):
         'open_rate': round(open_rate, 1)
     }
 
+    # [NEW] Fetch a sample email to show content preview
+    sample_email = Email.query.filter_by(campaign_id=id).first()
+    campaign_content = sample_email.body if sample_email else "<div style='padding:20px; font-family:sans-serif;'>No email content available for preview.</div>"
+    campaign_subject = sample_email.subject if sample_email else "No subject available"
+
     # 7. Render Template with pagination object
     return render_template(
         'campaign_details.html', 
         campaign=campaign, 
         stats=stats, 
-        pagination=pagination
+        pagination=pagination,
+        campaign_content=campaign_content, # Pass content
+        campaign_subject=campaign_subject  # Pass subject
     )
+
+# In app/routes.py
+
+@bp.route('/campaign/<int:id>/update-content', methods=['POST'])
+@login_required
+def update_campaign_content(id):
+    """
+    Updates the Subject and Body for all PENDING emails in a campaign.
+    WARNING: This overwrites personalized content with the new static content.
+    """
+    # 1. Verify Ownership
+    campaign = Campaign.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+
+    new_subject = request.form.get('subject')
+    new_body = request.form.get('body')
+
+    if not new_subject or not new_body:
+        flash("Subject and Body cannot be empty.", "danger")
+        return redirect(url_for('main.campaign_details', id=id))
+
+    # 2. Bulk Update Pending Emails
+    # This is efficient and modifies only emails that haven't been sent yet.
+    updated_count = Email.query.filter_by(campaign_id=id, status='pending').update(
+        {
+            Email.subject: new_subject, 
+            Email.body: new_body
+        }
+    )
+    db.session.commit()
+
+    if updated_count > 0:
+        flash(f"Successfully updated {updated_count} pending emails.", "success")
+    else:
+        flash("No pending emails found to update.", "warning")
+
+    return redirect(url_for('main.campaign_details', id=id))
 
 @bp.route('/api/campaign/<int:id>/stats')
 @login_required
