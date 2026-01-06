@@ -75,6 +75,10 @@ class Email(db.Model):
     tracking_id = db.Column(db.String(50), unique=True, nullable=True)
     opened_at = db.Column(db.DateTime, nullable=True)
     clicked_at = db.Column(db.DateTime, nullable=True)
+    sent_at = db.Column(db.DateTime, nullable=True)
+    bot_detected_at = db.Column(db.DateTime, nullable=True)
+    open_user_agent = db.Column(db.String(255), nullable=True)
+    open_ip_address = db.Column(db.String(50), nullable=True)
 
     def __repr__(self):
         return f'<Email {self.id} to {self.recipient}>'
