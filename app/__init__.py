@@ -16,6 +16,11 @@ def create_app(config_class=Config):
     db.init_app(app)
     login.init_app(app)
 
+    @login.user_loader
+    def load_user(user_id):
+        from app.models import User
+        return User.query.get(int(user_id))
+
     # Initialize Celery
     app.config.from_mapping(
         CELERY=dict(
