@@ -119,7 +119,7 @@ def safe_send(server, msg, recipient, settings, retry=1):
 # ---------------------------
 # Batch Worker Task
 # ---------------------------
-@shared_task(bind=True, max_retries=0)
+@shared_task(bind=True, max_retries=3)
 def send_batch_task(self, email_ids):
     print("\n" + "="*60)
     print(f"📨 SEND BATCH: {len(email_ids)} emails")
