@@ -27,7 +27,7 @@ class User(UserMixin, db.Model):
 
     # --- THE FIX: OVERRIDE FLASK-LOGIN'S DEFAULT CHECK ---
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         """
         Flask-Login calls this property on every request.
         If it returns False, the user is logged out immediately.

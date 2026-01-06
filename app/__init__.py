@@ -15,6 +15,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     login.init_app(app)
+    login.login_view = 'main.login'  # type: ignore
 
     @login.user_loader
     def load_user(user_id):
@@ -48,7 +49,7 @@ def celery_init_app(app: Flask) -> Celery:
     
     # Configure Beat schedule from config
     celery_app.conf.beat_schedule = app.config.get('CELERY_BEAT_SCHEDULE', {})
-    celery_app.conf.timezone = 'UTC'
+    setattr(celery_app.conf, 'timezone', 'UTC')
     
     celery_app.set_default()
     app.extensions["celery"] = celery_app
