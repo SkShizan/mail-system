@@ -27,10 +27,18 @@ def send_system_email(recipient, subject, body):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
 
-        # Connect to server
-        server = smtplib.SMTP(smtp_settings.server, smtp_settings.port or 587)
-        if smtp_settings.use_tls:
-            server.starttls()
+        # Use Port 465 for SSL or 587 for STARTTLS based on common settings
+        # Some servers close connection if EHLO isn't handled correctly or port is wrong
+        port = smtp_settings.port or 587
+        
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp_settings.server, port, timeout=30)
+        else:
+            server = smtplib.SMTP(smtp_settings.server, port, timeout=30)
+            server.ehlo()
+            if smtp_settings.use_tls:
+                server.starttls()
+                server.ehlo()
             
         server.login(smtp_settings.username, smtp_settings.password)
         server.send_message(msg)
