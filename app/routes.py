@@ -232,12 +232,31 @@ def get_activity_log():
 @bp.route('/compose', methods=['GET', 'POST'])
 @login_required
 def compose():
+    duplicate_id = request.args.get('duplicate_from')
     prefill = {
         'recipients': request.args.get('recipients', ''),
         'subject': request.args.get('subject', ''),
         'body': request.args.get('body', ''),
         'campaign_name': request.args.get('campaign_name', '')
     }
+
+    if duplicate_id:
+        old_camp = Campaign.query.filter_by(id=duplicate_id, user_id=current_user.id).first()
+        if old_camp:
+            prefill['campaign_name'] = f"Copy of {old_camp.name}"
+            # Load unique recipients from old campaign
+            # Accessing .emails relationship directly
+            recipients = [e.recipient for e in old_camp.emails]
+            prefill['recipients'] = ", ".join(list(dict.fromkeys(recipients)))
+            
+            # Load subject and body from the first email found in this campaign
+            first_email = Email.query.filter_by(campaign_id=old_camp.id).first()
+            if first_email:
+                prefill['subject'] = first_email.subject
+                prefill['body'] = first_email.body
+            
+            # Debugging - ensure we are prefilling
+            print(f"DEBUG: Duplicating campaign {duplicate_id}. Recipients: {len(recipients)}")
     
     if request.method == 'POST':
         campaign_name = request.form.get('campaign_name')

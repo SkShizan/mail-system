@@ -47,21 +47,37 @@ def send_system_email(recipient, subject, body):
     msg.attach(MIMEText(body, "html"))
 
     # ─────────────────────────────────────────────
-    # 3️⃣ Send Email over TLS (Port 587)
+    # 3️⃣ Send Email with Automatic Port/Protocol Fallback
     # ─────────────────────────────────────────────
-    try:
-        context = ssl.create_default_context()
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
-        server.set_debuglevel(1)  # Optional: prints SMTP debug info
-        server.ehlo()
-        server.starttls(context=context)
-        server.ehlo()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_sender, [recipient], msg.as_string())
-        server.quit()
-        print(f"✅ System email sent to {recipient}")
+    def try_send(p, use_ssl=False):
+        if use_ssl:
+            s = smtplib.SMTP_SSL(smtp_server, p, timeout=15)
+        else:
+            s = smtplib.SMTP(smtp_server, p, timeout=15)
+            s.ehlo()
+            try:
+                s.starttls(context=ssl.create_default_context())
+                s.ehlo()
+            except:
+                pass # Continue if STARTTLS fails
+        s.login(smtp_user, smtp_pass)
+        s.sendmail(smtp_sender, [recipient], msg.as_string())
+        s.quit()
         return True
 
+    try:
+        # Try the configured port first
+        return try_send(smtp_port, use_ssl=(smtp_port == 465))
     except Exception as e:
-        print(f"❌ SMTP send failed: {e}")
+        print(f"⚠️ Initial SMTP attempt failed (Port {smtp_port}): {e}")
+        
+        # Fallback sequence: 465 -> 587 -> 25
+        for fallback_port in [465, 587, 25]:
+            if fallback_port == smtp_port: continue
+            try:
+                print(f"🔄 Trying fallback Port {fallback_port}...")
+                return try_send(fallback_port, use_ssl=(fallback_port == 465))
+            except Exception as fe:
+                print(f"❌ Fallback Port {fallback_port} failed: {fe}")
+        
         return False
